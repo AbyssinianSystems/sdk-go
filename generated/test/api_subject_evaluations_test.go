@@ -11,10 +11,11 @@ package client
 
 import (
 	"context"
+	"testing"
+
+	openapiclient "github.com/AbyssForge/sdk-go/generated"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"testing"
-	openapiclient "github.com/GIT_USER_ID/GIT_REPO_ID"
 )
 
 func Test_client_SubjectEvaluationsAPIService(t *testing.T) {
@@ -24,7 +25,7 @@ func Test_client_SubjectEvaluationsAPIService(t *testing.T) {
 
 	t.Run("Test SubjectEvaluationsAPIService CompareSubjectRuleset", func(t *testing.T) {
 
-		t.Skip("skip test")  // remove to run test
+		t.Skip("skip test") // remove to run test
 
 		var subjectId string
 
@@ -38,7 +39,7 @@ func Test_client_SubjectEvaluationsAPIService(t *testing.T) {
 
 	t.Run("Test SubjectEvaluationsAPIService GetLatestSubjectEvaluation", func(t *testing.T) {
 
-		t.Skip("skip test")  // remove to run test
+		t.Skip("skip test") // remove to run test
 
 		var subjectId string
 
@@ -52,7 +53,7 @@ func Test_client_SubjectEvaluationsAPIService(t *testing.T) {
 
 	t.Run("Test SubjectEvaluationsAPIService GetOutcomeAnalysis", func(t *testing.T) {
 
-		t.Skip("skip test")  // remove to run test
+		t.Skip("skip test") // remove to run test
 
 		resp, httpRes, err := apiClient.SubjectEvaluationsAPI.GetOutcomeAnalysis(context.Background()).Execute()
 
@@ -64,7 +65,7 @@ func Test_client_SubjectEvaluationsAPIService(t *testing.T) {
 
 	t.Run("Test SubjectEvaluationsAPIService GetSubjectInvestigation", func(t *testing.T) {
 
-		t.Skip("skip test")  // remove to run test
+		t.Skip("skip test") // remove to run test
 
 		var subjectId string
 
@@ -78,7 +79,7 @@ func Test_client_SubjectEvaluationsAPIService(t *testing.T) {
 
 	t.Run("Test SubjectEvaluationsAPIService ListSubjectEvaluations", func(t *testing.T) {
 
-		t.Skip("skip test")  // remove to run test
+		t.Skip("skip test") // remove to run test
 
 		var subjectId string
 
@@ -92,7 +93,7 @@ func Test_client_SubjectEvaluationsAPIService(t *testing.T) {
 
 	t.Run("Test SubjectEvaluationsAPIService PostSubjectReviewOutcome", func(t *testing.T) {
 
-		t.Skip("skip test")  // remove to run test
+		t.Skip("skip test") // remove to run test
 
 		var subjectId string
 
@@ -106,7 +107,7 @@ func Test_client_SubjectEvaluationsAPIService(t *testing.T) {
 
 	t.Run("Test SubjectEvaluationsAPIService RecomputeSubject", func(t *testing.T) {
 
-		t.Skip("skip test")  // remove to run test
+		t.Skip("skip test") // remove to run test
 
 		var subjectId string
 

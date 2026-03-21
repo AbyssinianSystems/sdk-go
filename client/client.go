@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strings"
 
-	gen "github.com/abyssforge/sdk-go/generated"
+	gen "github.com/AbyssForge/sdk-go/generated"
 )
 
 // Client wraps the generated API client with a focused, ergonomic surface.

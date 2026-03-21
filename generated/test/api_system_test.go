@@ -11,10 +11,11 @@ package client
 
 import (
 	"context"
+	"testing"
+
+	openapiclient "github.com/AbyssForge/sdk-go/generated"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"testing"
-	openapiclient "github.com/GIT_USER_ID/GIT_REPO_ID"
 )
 
 func Test_client_SystemAPIService(t *testing.T) {
@@ -24,7 +25,7 @@ func Test_client_SystemAPIService(t *testing.T) {
 
 	t.Run("Test SystemAPIService GetHealthz", func(t *testing.T) {
 
-		t.Skip("skip test")  // remove to run test
+		t.Skip("skip test") // remove to run test
 
 		resp, httpRes, err := apiClient.SystemAPI.GetHealthz(context.Background()).Execute()
 
@@ -36,7 +37,7 @@ func Test_client_SystemAPIService(t *testing.T) {
 
 	t.Run("Test SystemAPIService GetLivez", func(t *testing.T) {
 
-		t.Skip("skip test")  // remove to run test
+		t.Skip("skip test") // remove to run test
 
 		resp, httpRes, err := apiClient.SystemAPI.GetLivez(context.Background()).Execute()
 
@@ -48,7 +49,7 @@ func Test_client_SystemAPIService(t *testing.T) {
 
 	t.Run("Test SystemAPIService GetReadyz", func(t *testing.T) {
 
-		t.Skip("skip test")  // remove to run test
+		t.Skip("skip test") // remove to run test
 
 		resp, httpRes, err := apiClient.SystemAPI.GetReadyz(context.Background()).Execute()
 

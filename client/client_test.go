@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	gen "github.com/abyssforge/sdk-go/generated"
+	gen "github.com/AbyssForge/sdk-go/generated"
 )
 
 // TestIngestSignalAndGetLatestEvaluation_Success verifies the convenience method
