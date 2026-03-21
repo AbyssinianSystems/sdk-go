@@ -1,0 +1,5000 @@
+openapi: 3.1.0
+info:
+  description: |
+    Importable OpenAPI document for the current AbyssForge HTTP boundary.
+
+    Current implemented routes:
+    - GET /healthz
+    - GET /livez
+    - GET /readyz
+    - POST /v1/signal-events
+    - GET /v1/outcome-analysis
+    - GET /v1/subjects/{subject_id}/latest-evaluation
+    - GET /v1/subjects/{subject_id}/signal-events
+    - GET /v1/subjects/{subject_id}/evaluations
+    - GET /v1/subjects/{subject_id}/investigation
+    - POST /v1/subjects/{subject_id}/review-outcomes
+    - POST /v1/subjects/{subject_id}/recompute
+    - POST /v1/subjects/{subject_id}/ruleset-comparisons
+  title: AbyssForge API
+  version: 0.1.0
+servers:
+- description: Local development server
+  url: http://localhost:8080
+tags:
+- description: Liveness and service metadata
+  name: System
+- description: Ingest raw detector signals into canonical events and trigger subject
+    evaluation
+  name: Signal Events
+- description: Read APIs for persisted evaluation artifacts
+  name: Subject Evaluations
+paths:
+  /healthz:
+    get:
+      description: Returns the compatibility liveness response for the running service.
+      operationId: getHealthz
+      responses:
+        "200":
+          content:
+            application/json:
+              examples:
+                ok:
+                  value:
+                    status: ok
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+          description: Service process is live
+        "405":
+          content:
+            application/json:
+              examples:
+                rejected:
+                  value:
+                    status: rejected
+                    reason: method_not_allowed
+                    rejection_reasons:
+                    - code: method_not_allowed
+                      message: Method Not Allowed
+              schema:
+                $ref: "#/components/schemas/IngestResult"
+          description: Method not allowed
+      summary: Health check
+      tags:
+      - System
+  /livez:
+    get:
+      description: Returns whether the HTTP process is live enough to serve requests.
+      operationId: getLivez
+      responses:
+        "200":
+          content:
+            application/json:
+              examples:
+                ok:
+                  value:
+                    status: ok
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+          description: Service process is live
+        "405":
+          content:
+            application/json:
+              examples:
+                rejected:
+                  value:
+                    status: rejected
+                    reason: method_not_allowed
+                    rejection_reasons:
+                    - code: method_not_allowed
+                      message: Method Not Allowed
+              schema:
+                $ref: "#/components/schemas/IngestResult"
+          description: Method not allowed
+      summary: Liveness check
+      tags:
+      - System
+  /readyz:
+    get:
+      description: Returns whether the running service has an initialized store and
+        is ready to serve traffic.
+      operationId: getReadyz
+      responses:
+        "200":
+          content:
+            application/json:
+              examples:
+                ready:
+                  value:
+                    status: ready
+                    store: ok
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+          description: Service is ready
+        "503":
+          content:
+            application/json:
+              examples:
+                unavailable:
+                  value:
+                    status: not_ready
+                    store: unavailable
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+          description: Service is not ready
+        "405":
+          content:
+            application/json:
+              examples:
+                rejected:
+                  value:
+                    status: rejected
+                    reason: method_not_allowed
+                    rejection_reasons:
+                    - code: method_not_allowed
+                      message: Method Not Allowed
+              schema:
+                $ref: "#/components/schemas/IngestResult"
+          description: Method not allowed
+      summary: Readiness check
+      tags:
+      - System
+  /v1/signal-events:
+    post:
+      description: |
+        Accepts one raw detector payload, validates and normalizes it into a canonical
+        `SignalEvent`, deduplicates it, persists it, evaluates the subject when the
+        event is newly accepted, persists the derived feature snapshot, score result,
+        and recommendation, and returns the explicit ingestion outcome.
+      operationId: postSignalEvent
+      requestBody:
+        content:
+          application/json:
+            examples:
+              consistentActionInterval:
+                value:
+                  subject_id: acct_12345
+                  producer: interval-detector
+                  producer_event_id: det-884221
+                  signal_type: consistent-action-interval
+                  occurred_at: 2026-03-07T11:45:00Z
+                  severity: high
+                  confidence: 0.92
+                  value: 0.98
+                  unit: regularity_score
+                  correlation_ids:
+                  - sess_789
+                  - match_456
+                  attributes:
+                    platform: pc
+                    environment: prod
+              apiOnlyActivity:
+                value:
+                  subject_id: acct_12345
+                  producer: api-gateway-detector
+                  producer_event_id: det-991112
+                  signal_type: api-only-activity
+                  occurred_at: 2026-03-07T11:55:00Z
+                  severity: critical
+                  confidence: 0.95
+                  value: 24
+                  unit: api_requests
+                  correlation_ids:
+                  - token_321
+                  - client_abc
+                  attributes:
+                    page_views: "0"
+                    api_requests: "24"
+              noPageViews:
+                value:
+                  subject_id: acct_12345
+                  producer: client-telemetry-detector
+                  producer_event_id: det-771001
+                  signal_type: no-page-views
+                  occurred_at: 2026-03-07T11:58:00Z
+                  severity: medium
+                  confidence: 0.91
+                  value: 0
+                  unit: page_views
+                  correlation_ids:
+                  - sess_789
+                  attributes:
+                    page_views: "0"
+                    session_kind: api_only
+            schema:
+              $ref: "#/components/schemas/RawSignalEventPayload"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              examples:
+                accepted:
+                  value:
+                    status: accepted
+                    reason: persisted_new_canonical_event
+                    canonical_event_ref:
+                      kind: signal_event
+                      id: evt_acct_12345_261850d7b8ef8c4d
+                    event:
+                      id: evt_acct_12345_261850d7b8ef8c4d
+                      dedupe_key: producer=interval-detector|producer_event_id=det-884221
+                      schema_version: "1"
+                      subject_id: acct_12345
+                      subject_kind: account
+                      producer_event_id: det-884221
+                      signal_type: consistent_action_interval
+                      producer: interval-detector
+                      occurred_at: 2026-03-07T11:45:00Z
+                      ingested_at: 2026-03-07T12:00:00Z
+                      severity: high
+                      confidence: 0.92
+                      value: 0.98
+                      unit: regularity_score
+                      normalization_version: ingest/v1
+                      correlation_ids:
+                      - sess_789
+                      - match_456
+                      metadata:
+                      - key: environment
+                        value: prod
+                      - key: platform
+                        value: pc
+                    evaluation:
+                      status: completed
+                      snapshot_ref:
+                        kind: feature_snapshot
+                        id: fs_acct_12345_20260307120000
+                      score_result_ref:
+                        kind: score_result
+                        id: score_acct_12345_score_v1_20260307120000
+                      recommendation_ref:
+                        kind: recommendation
+                        id: rec_acct_12345_score_acct_12345_score_v1_20260307120000_20260307120000
+              schema:
+                $ref: "#/components/schemas/IngestResult"
+          description: New canonical event accepted and subject evaluation completed
+        "200":
+          content:
+            application/json:
+              examples:
+                duplicateSkipped:
+                  value:
+                    status: duplicate
+                    reason: matched_existing_canonical_event
+                    canonical_event_ref:
+                      kind: signal_event
+                      id: evt_acct_12345_261850d7b8ef8c4d
+                    event:
+                      id: evt_acct_12345_261850d7b8ef8c4d
+                      dedupe_key: producer=interval-detector|producer_event_id=det-884221
+                      schema_version: "1"
+                      subject_id: acct_12345
+                      subject_kind: account
+                      producer_event_id: det-884221
+                      signal_type: consistent_action_interval
+                      producer: interval-detector
+                      occurred_at: 2026-03-07T11:45:00Z
+                      ingested_at: 2026-03-07T12:00:00Z
+                      severity: high
+                      confidence: 0.92
+                      value: 0.98
+                      unit: regularity_score
+                      normalization_version: ingest/v1
+                    evaluation:
+                      status: skipped
+                      reason: duplicate_event
+                duplicateRecovered:
+                  value:
+                    status: duplicate
+                    reason: matched_existing_canonical_event
+                    canonical_event_ref:
+                      kind: signal_event
+                      id: evt_acct_12345_261850d7b8ef8c4d
+                    event:
+                      id: evt_acct_12345_261850d7b8ef8c4d
+                      dedupe_key: producer=interval-detector|producer_event_id=det-884221
+                      schema_version: "1"
+                      subject_id: acct_12345
+                      subject_kind: account
+                      producer_event_id: det-884221
+                      signal_type: consistent_action_interval
+                      producer: interval-detector
+                      occurred_at: 2026-03-07T11:45:00Z
+                      ingested_at: 2026-03-07T12:00:00Z
+                      severity: high
+                      confidence: 0.92
+                      value: 0.98
+                      unit: regularity_score
+                      normalization_version: ingest/v1
+                    evaluation:
+                      status: completed
+                      snapshot_ref:
+                        kind: feature_snapshot
+                        id: fs_acct_12345_20260307120005
+                      score_result_ref:
+                        kind: score_result
+                        id: score_acct_12345_score_v1_20260307120005
+                      recommendation_ref:
+                        kind: recommendation
+                        id: rec_acct_12345_score_acct_12345_score_v1_20260307120005_20260307120005
+              schema:
+                $ref: "#/components/schemas/IngestResult"
+          description: "Duplicate event matched an existing canonical event; evaluation\
+            \ is skipped when the prior evaluation already completed, or completed\
+            \ inline when recovering from an earlier post-persist failure"
+        "400":
+          content:
+            application/json:
+              examples:
+                missingOccurredAt:
+                  value:
+                    status: rejected
+                    reason: validation_failed
+                    evaluation:
+                      status: skipped
+                      reason: rejected_event
+                    rejection_reasons:
+                    - code: invalid_field
+                      field: occurred_at
+                      message: occurred_at is required
+              schema:
+                $ref: "#/components/schemas/IngestResult"
+          description: Payload rejected during ingestion validation
+        "500":
+          content:
+            application/json:
+              examples:
+                storageError:
+                  value:
+                    status: rejected
+                    reason: storage_error
+                    rejection_reasons:
+                    - code: storage_error
+                      message: signal event could not be persisted
+              schema:
+                $ref: "#/components/schemas/IngestResult"
+          description: Persistence or evaluation failure
+      summary: Ingest a raw detector event
+      tags:
+      - Signal Events
+  /v1/outcome-analysis:
+    get:
+      description: |
+        Returns a structured read model that compares persisted recommendations
+        with later review outcomes. Optional filters allow narrowing the result
+        by subject, recommendation type, or review label.
+      operationId: getOutcomeAnalysis
+      parameters:
+      - explode: true
+        in: query
+        name: subject_id
+        required: false
+        schema:
+          type: string
+        style: form
+      - explode: true
+        in: query
+        name: recommendation_type
+        required: false
+        schema:
+          enum:
+          - allow
+          - monitor
+          - review
+          - throttle
+          - escalate
+          type: string
+        style: form
+      - explode: true
+        in: query
+        name: review_label
+        required: false
+        schema:
+          enum:
+          - confirmed_abuse
+          - false_positive
+          - no_action
+          - needs_more_context
+          type: string
+        style: form
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OutcomeAnalysis"
+          description: Outcome analysis read model
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IngestResult"
+          description: One or more query filters were invalid
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IngestResult"
+          description: The outcome analysis could not be loaded
+      summary: Get deterministic recommendation outcome analysis
+      tags:
+      - Subject Evaluations
+  /v1/subjects/{subject_id}/latest-evaluation:
+    get:
+      description: |
+        Returns the latest persisted feature snapshot, score result, recommendation,
+        and canonical signal events used by the latest subject evaluation.
+      operationId: getLatestSubjectEvaluation
+      parameters:
+      - $ref: "#/components/parameters/SubjectID"
+      responses:
+        "200":
+          content:
+            application/json:
+              examples:
+                latest:
+                  value:
+                    subject_id: acct_12345
+                    evaluation_run:
+                      id: eval_acct_12345_20260307120100_1709816460000000000
+                      subject_id: acct_12345
+                      trigger_type: ingest
+                      ruleset_version: score/v1
+                      feature_set_version: features/v1
+                      started_at: 2026-03-07T12:01:00Z
+                      completed_at: 2026-03-07T12:01:00Z
+                      status: completed
+                      snapshot_ref:
+                        kind: feature_snapshot
+                        id: fs_acct_12345_20260307120100
+                      score_result_ref:
+                        kind: score_result
+                        id: score_acct_12345_score_v1_20260307120100
+                      recommendation_ref:
+                        kind: recommendation
+                        id: rec_acct_12345_score_acct_12345_score_v1_20260307120100_20260307120100
+                    signal_events:
+                    - id: evt_acct_12345_261850d7b8ef8c4d
+                      dedupe_key: producer=interval-detector|producer_event_id=det-884221
+                      schema_version: "1"
+                      subject_id: acct_12345
+                      subject_kind: account
+                      producer_event_id: det-884221
+                      signal_type: consistent_action_interval
+                      producer: interval-detector
+                      occurred_at: 2026-03-07T11:45:00Z
+                      ingested_at: 2026-03-07T12:00:00Z
+                      severity: high
+                      confidence: 0.92
+                      value: 0.98
+                      unit: regularity_score
+                      normalization_version: ingest/v1
+                    - id: evt_acct_12345_440ccdc001f06da0
+                      dedupe_key: producer=api-gateway-detector|producer_event_id=det-991112
+                      schema_version: "1"
+                      subject_id: acct_12345
+                      subject_kind: account
+                      producer_event_id: det-991112
+                      signal_type: api_only_activity
+                      producer: api-gateway-detector
+                      occurred_at: 2026-03-07T11:55:00Z
+                      ingested_at: 2026-03-07T12:01:00Z
+                      severity: critical
+                      confidence: 0.95
+                      value: 24
+                      unit: api_requests
+                      normalization_version: ingest/v1
+                    snapshot:
+                      id: fs_acct_12345_20260307120100
+                      subject_id: acct_12345
+                      feature_set_version: features/v1
+                      evaluated_at: 2026-03-07T12:01:00Z
+                      values:
+                      - name: consistent_interval_count_24h
+                        value: 1
+                        unit: events
+                      - name: api_only_activity_count_24h
+                        value: 1
+                        unit: events
+                      summaries:
+                      - name: signal_event_count_24h
+                        value: 2
+                        unit: events
+                      provenance:
+                      - kind: signal_event
+                        id: evt_acct_12345_261850d7b8ef8c4d
+                      - kind: signal_event
+                        id: evt_acct_12345_440ccdc001f06da0
+                    score_result:
+                      id: score_acct_12345_score_v1_20260307120100
+                      subject_id: acct_12345
+                      ruleset_version: score/v1
+                      evaluated_at: 2026-03-07T12:01:00Z
+                      snapshot:
+                        kind: feature_snapshot
+                        id: fs_acct_12345_20260307120100
+                      score: 50
+                      band: high
+                      contributions:
+                      - key: consistent_interval_count_24h
+                        rule_id: consistent_interval_count_24h/v1
+                        category: feature
+                        label: consistent action interval observed in last 24h
+                        value: 15
+                      - key: api_only_activity_count_24h
+                        rule_id: api_only_activity_count_24h/v1
+                        category: feature
+                        label: api-only activity observed in last 24h
+                        value: 35
+                    recommendation:
+                      id: rec_acct_12345_score_acct_12345_score_v1_20260307120100_20260307120100
+                      subject_id: acct_12345
+                      recommended_at: 2026-03-07T12:01:00Z
+                      policy_version: recommend/v1
+                      type: review
+                      confidence: 0.85
+                      rationale: score crossed review threshold with corroborating
+                        evidence
+                      primary_reason: review_threshold_crossed_corroborated
+                      additional_reasons: []
+                      score_result:
+                        kind: score_result
+                        id: score_acct_12345_score_v1_20260307120100
+              schema:
+                $ref: "#/components/schemas/SubjectEvaluationBundle"
+          description: Latest evaluation bundle for the subject
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IngestResult"
+          description: No persisted evaluation exists for the subject
+      summary: Get the latest persisted evaluation for a subject
+      tags:
+      - Subject Evaluations
+  /v1/subjects/{subject_id}/review-outcomes:
+    post:
+      description: |
+        Records one append-only `ReviewOutcome` against a persisted subject
+        `Recommendation` or `ScoreResult`. The service validates that the target
+        artifact exists and belongs to the requested subject before persisting
+        the review outcome.
+      operationId: postSubjectReviewOutcome
+      parameters:
+      - $ref: "#/components/parameters/SubjectID"
+      requestBody:
+        content:
+          application/json:
+            examples:
+              recommendationReview:
+                value:
+                  reviewed_object:
+                    kind: recommendation
+                    id: rec_acct_12345_score_acct_12345_score_v1_20260307120100_20260307120100
+                  reviewer: operator@example
+                  label: false_positive
+                  notes: manual review confirmed detector noise
+                  disposition: no_external_action
+            schema:
+              $ref: "#/components/schemas/ReviewOutcomeWriteRequest"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReviewOutcome"
+          description: Review outcome persisted
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IngestResult"
+          description: Review-outcome request failed validation
+        "404":
+          content:
+            application/json:
+              examples:
+                notFound:
+                  value:
+                    status: rejected
+                    reason: subject_evaluation_not_found
+                    rejection_reasons:
+                    - code: not_found
+                      field: subject_id
+                      message: no evaluation found for subject
+              schema:
+                $ref: "#/components/schemas/IngestResult"
+          description: Subject or reviewed object was not found
+        "500":
+          content:
+            application/json:
+              examples:
+                lookupFailed:
+                  value:
+                    status: rejected
+                    reason: subject_evaluation_lookup_failed
+                    rejection_reasons:
+                    - code: storage_error
+                      message: latest subject evaluation could not be loaded
+              schema:
+                $ref: "#/components/schemas/IngestResult"
+          description: The latest subject evaluation could not be loaded
+      summary: Record a review outcome for a subject artifact
+      tags:
+      - Subject Evaluations
+  /v1/subjects/{subject_id}/signal-events:
+    get:
+      description: |
+        Returns the canonical signal events that were accepted for the subject.
+        This makes normalized values and deduplicated event identity inspectable.
+      operationId: listSubjectSignalEvents
+      parameters:
+      - $ref: "#/components/parameters/SubjectID"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubjectSignalEventList"
+          description: Canonical signal events for the subject
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IngestResult"
+          description: No signal events exist for the subject
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IngestResult"
+          description: The subject signal events could not be loaded
+      summary: List canonical signal events for a subject
+      tags:
+      - Signal Events
+  /v1/subjects/{subject_id}/evaluations:
+    get:
+      description: |
+        Returns the subject's persisted evaluation history, including replayed
+        results across versioned scoring policies.
+      operationId: listSubjectEvaluations
+      parameters:
+      - $ref: "#/components/parameters/SubjectID"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubjectEvaluationHistory"
+          description: Evaluation history for the subject
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IngestResult"
+          description: No persisted evaluation exists for the subject
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IngestResult"
+          description: The subject evaluation history could not be loaded
+      summary: List persisted evaluations for a subject
+      tags:
+      - Subject Evaluations
+  /v1/subjects/{subject_id}/investigation:
+    get:
+      description: |
+        Returns the current inspectable investigation artifacts for a subject,
+        including signal events, derived artifacts, the latest evaluation, and
+        any persisted review outcomes.
+      operationId: getSubjectInvestigation
+      parameters:
+      - $ref: "#/components/parameters/SubjectID"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubjectInvestigation"
+          description: Investigation read model for the subject
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IngestResult"
+          description: No investigation artifacts exist for the subject
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IngestResult"
+          description: The subject investigation could not be loaded
+      summary: Get the investigation read model for a subject
+      tags:
+      - Subject Evaluations
+  /v1/subjects/{subject_id}/recompute:
+    post:
+      description: |
+        Rebuilds the subject's feature snapshot, score result, and recommendation
+        from stored signal events. When a `score_ruleset_version` is supplied,
+        the replay uses that version and persists the resulting artifacts.
+      operationId: recomputeSubject
+      parameters:
+      - $ref: "#/components/parameters/SubjectID"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubjectRecomputeRequest"
+        required: false
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubjectEvaluationBundle"
+          description: Recomputed subject evaluation bundle
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IngestResult"
+          description: The recompute request was invalid
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IngestResult"
+          description: No signal events exist for the subject
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IngestResult"
+          description: The subject recompute failed
+      summary: Recompute and persist a subject evaluation
+      tags:
+      - Subject Evaluations
+  /v1/subjects/{subject_id}/ruleset-comparisons:
+    post:
+      description: |
+        Replays the subject under a candidate score ruleset version, persists the
+        candidate artifacts, and returns the baseline-versus-candidate comparison.
+      operationId: compareSubjectRuleset
+      parameters:
+      - $ref: "#/components/parameters/SubjectID"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RulesetComparisonRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RulesetComparison"
+          description: Baseline and candidate comparison for the subject
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IngestResult"
+          description: The comparison request was invalid
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IngestResult"
+          description: No persisted evaluation exists for the subject
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IngestResult"
+          description: The ruleset comparison could not be completed
+      summary: Compare the latest evaluation with a candidate ruleset replay
+      tags:
+      - Subject Evaluations
+components:
+  parameters:
+    SubjectID:
+      description: Canonical account identifier for the scored subject
+      explode: false
+      in: path
+      name: subject_id
+      required: true
+      schema:
+        minLength: 1
+        type: string
+      style: simple
+  schemas:
+    HealthStatus:
+      example:
+        store: ok
+        status: ok
+      properties:
+        status:
+          enum:
+          - ok
+          - ready
+          - not_ready
+          type: string
+        store:
+          enum:
+          - ok
+          - unavailable
+          type: string
+      required:
+      - status
+    RawSignalEventPayload:
+      additionalProperties: false
+      example:
+        subject_id: subject_id
+        occurred_at: 2000-01-23T04:56:07.000+00:00
+        severity: low
+        unit: unit
+        correlation_ids:
+        - correlation_ids
+        - correlation_ids
+        producer_event_id: producer_event_id
+        confidence: 0.08008281904610115
+        producer: producer
+        attributes:
+          key: attributes
+        value: 6.027456183070403
+        signal_type: signal_type
+      properties:
+        subject_id:
+          type: string
+        producer:
+          type: string
+        producer_event_id:
+          type: string
+        signal_type:
+          description: Canonical or legacy alias value accepted by ingestion
+          type: string
+        occurred_at:
+          format: date-time
+          type: string
+        severity:
+          enum:
+          - low
+          - medium
+          - high
+          - critical
+          type: string
+        confidence:
+          maximum: 1
+          minimum: 0
+          type: number
+        value:
+          type: number
+        unit:
+          type: string
+        correlation_ids:
+          items:
+            type: string
+          type: array
+        attributes:
+          additionalProperties:
+            type: string
+      required:
+      - occurred_at
+      - producer
+      - signal_type
+      - subject_id
+    SubjectRecomputeRequest:
+      additionalProperties: false
+      example:
+        score_ruleset_version: score/v1
+      properties:
+        score_ruleset_version:
+          enum:
+          - score/v1
+          - score/v2
+          type: string
+    RulesetComparisonRequest:
+      additionalProperties: false
+      example:
+        candidate_score_ruleset_version: score/v1
+      properties:
+        candidate_score_ruleset_version:
+          enum:
+          - score/v1
+          - score/v2
+          type: string
+      required:
+      - candidate_score_ruleset_version
+    IngestResult:
+      example:
+        evaluation:
+          reason: reason
+          score_result_ref:
+            kind: signal_event
+            id: id
+          snapshot_ref:
+            kind: signal_event
+            id: id
+          recommendation_ref:
+            kind: signal_event
+            id: id
+          status: completed
+        reason: reason
+        canonical_event_ref:
+          kind: signal_event
+          id: id
+        rejection_reasons:
+        - code: code
+          field: field
+          message: message
+        - code: code
+          field: field
+          message: message
+        event:
+          subject_id: subject_id
+          severity: low
+          metadata:
+          - value: value
+            key: key
+          - value: value
+            key: key
+          subject_kind: account
+          correlation_ids:
+          - correlation_ids
+          - correlation_ids
+          producer_event_id: producer_event_id
+          confidence: 0.08008281904610115
+          signal_type: consistent_action_interval
+          schema_version: schema_version
+          occurred_at: 2000-01-23T04:56:07.000+00:00
+          unit: unit
+          ingested_at: 2000-01-23T04:56:07.000+00:00
+          producer: producer
+          normalization_version: normalization_version
+          id: id
+          value: 6.027456183070403
+          dedupe_key: dedupe_key
+        status: accepted
+      properties:
+        status:
+          enum:
+          - accepted
+          - duplicate
+          - rejected
+          type: string
+        reason:
+          type: string
+        canonical_event_ref:
+          $ref: "#/components/schemas/ArtifactRef"
+        event:
+          $ref: "#/components/schemas/SignalEvent"
+        evaluation:
+          $ref: "#/components/schemas/EvaluationResult"
+        rejection_reasons:
+          items:
+            $ref: "#/components/schemas/RejectionReason"
+          type: array
+      required:
+      - status
+    EvaluationResult:
+      example:
+        reason: reason
+        score_result_ref:
+          kind: signal_event
+          id: id
+        snapshot_ref:
+          kind: signal_event
+          id: id
+        recommendation_ref:
+          kind: signal_event
+          id: id
+        status: completed
+      properties:
+        status:
+          enum:
+          - completed
+          - skipped
+          type: string
+        reason:
+          type: string
+        snapshot_ref:
+          $ref: "#/components/schemas/ArtifactRef"
+        score_result_ref:
+          $ref: "#/components/schemas/ArtifactRef"
+        recommendation_ref:
+          $ref: "#/components/schemas/ArtifactRef"
+      required:
+      - status
+    RejectionReason:
+      example:
+        code: code
+        field: field
+        message: message
+      properties:
+        code:
+          type: string
+        field:
+          type: string
+        message:
+          type: string
+      required:
+      - code
+      - message
+    ArtifactRef:
+      example:
+        kind: signal_event
+        id: id
+      properties:
+        kind:
+          enum:
+          - signal_event
+          - feature_snapshot
+          - score_result
+          - recommendation
+          - review_outcome
+          - evaluation_run
+          type: string
+        id:
+          type: string
+      required:
+      - id
+      - kind
+    MetadataField:
+      example:
+        value: value
+        key: key
+      properties:
+        key:
+          type: string
+        value:
+          type: string
+      required:
+      - key
+      - value
+    SignalEvent:
+      example:
+        subject_id: subject_id
+        severity: low
+        metadata:
+        - value: value
+          key: key
+        - value: value
+          key: key
+        subject_kind: account
+        correlation_ids:
+        - correlation_ids
+        - correlation_ids
+        producer_event_id: producer_event_id
+        confidence: 0.08008281904610115
+        signal_type: consistent_action_interval
+        schema_version: schema_version
+        occurred_at: 2000-01-23T04:56:07.000+00:00
+        unit: unit
+        ingested_at: 2000-01-23T04:56:07.000+00:00
+        producer: producer
+        normalization_version: normalization_version
+        id: id
+        value: 6.027456183070403
+        dedupe_key: dedupe_key
+      properties:
+        id:
+          type: string
+        dedupe_key:
+          type: string
+        schema_version:
+          type: string
+        subject_id:
+          type: string
+        subject_kind:
+          enum:
+          - account
+          type: string
+        producer_event_id:
+          type: string
+        signal_type:
+          enum:
+          - consistent_action_interval
+          - api_only_activity
+          - no_page_views
+          type: string
+        producer:
+          type: string
+        occurred_at:
+          format: date-time
+          type: string
+        ingested_at:
+          format: date-time
+          type: string
+        severity:
+          enum:
+          - low
+          - medium
+          - high
+          - critical
+          type: string
+        confidence:
+          maximum: 1
+          minimum: 0
+          type: number
+        value:
+          type: number
+        unit:
+          type: string
+        normalization_version:
+          type: string
+        correlation_ids:
+          items:
+            type: string
+          type: array
+        metadata:
+          items:
+            $ref: "#/components/schemas/MetadataField"
+          type: array
+      required:
+      - dedupe_key
+      - id
+      - ingested_at
+      - normalization_version
+      - occurred_at
+      - producer
+      - schema_version
+      - severity
+      - signal_type
+      - subject_id
+      - subject_kind
+    FeatureWindow:
+      example:
+        end_at: 2000-01-23T04:56:07.000+00:00
+        event_ids:
+        - event_ids
+        - event_ids
+        name: name
+        start_at: 2000-01-23T04:56:07.000+00:00
+      properties:
+        name:
+          type: string
+        start_at:
+          format: date-time
+          type: string
+        end_at:
+          format: date-time
+          type: string
+        event_ids:
+          items:
+            type: string
+          type: array
+      required:
+      - end_at
+      - name
+      - start_at
+    FeatureValue:
+      example:
+        unit: unit
+        name: name
+        value: 1.4894159098541704
+      properties:
+        name:
+          type: string
+        value:
+          type: number
+        unit:
+          type: string
+      required:
+      - name
+      - unit
+      - value
+    EvidenceRef:
+      example:
+        artifact:
+          kind: signal_event
+          id: id
+        field: field
+      properties:
+        artifact:
+          $ref: "#/components/schemas/ArtifactRef"
+        field:
+          type: string
+      required:
+      - artifact
+      - field
+    ScoreContribution:
+      example:
+        rule_id: rule_id
+        applied_floor: 5.962133916683182
+        notes: notes
+        evidence:
+        - artifact:
+            kind: signal_event
+            id: id
+          field: field
+        - artifact:
+            kind: signal_event
+            id: id
+          field: field
+        label: label
+        category: signal
+        value: 6.027456183070403
+        key: key
+        applied_cap: 1.4658129805029452
+      properties:
+        key:
+          type: string
+        rule_id:
+          type: string
+        category:
+          enum:
+          - signal
+          - feature
+          - interaction
+          - guardrail
+          type: string
+        label:
+          type: string
+        value:
+          type: number
+        applied_cap:
+          type: number
+        applied_floor:
+          type: number
+        evidence:
+          items:
+            $ref: "#/components/schemas/EvidenceRef"
+          type: array
+        notes:
+          type: string
+      required:
+      - category
+      - key
+      - label
+      - rule_id
+      - value
+    ExplanationFeature:
+      example:
+        unit: unit
+        name: name
+        value: 1.4894159098541704
+      properties:
+        name:
+          type: string
+        value:
+          type: number
+        unit:
+          type: string
+      required:
+      - name
+      - unit
+      - value
+    ExplanationRule:
+      example:
+        rule_id: rule_id
+        contribution: 1.0246457001441578
+        notes: notes
+        feature: feature
+        evidence:
+        - artifact:
+            kind: signal_event
+            id: id
+          field: field
+        - artifact:
+            kind: signal_event
+            id: id
+          field: field
+        label: label
+        category: signal
+      properties:
+        rule_id:
+          type: string
+        label:
+          type: string
+        feature:
+          type: string
+        contribution:
+          type: number
+        category:
+          enum:
+          - signal
+          - feature
+          - interaction
+          - guardrail
+          type: string
+        evidence:
+          items:
+            $ref: "#/components/schemas/EvidenceRef"
+          type: array
+        notes:
+          type: string
+      required:
+      - category
+      - contribution
+      - feature
+      - label
+      - rule_id
+    ScoreExplanation:
+      example:
+        summary: summary
+        features:
+        - unit: unit
+          name: name
+          value: 1.4894159098541704
+        - unit: unit
+          name: name
+          value: 1.4894159098541704
+        rules:
+        - rule_id: rule_id
+          contribution: 1.0246457001441578
+          notes: notes
+          feature: feature
+          evidence:
+          - artifact:
+              kind: signal_event
+              id: id
+            field: field
+          - artifact:
+              kind: signal_event
+              id: id
+            field: field
+          label: label
+          category: signal
+        - rule_id: rule_id
+          contribution: 1.0246457001441578
+          notes: notes
+          feature: feature
+          evidence:
+          - artifact:
+              kind: signal_event
+              id: id
+            field: field
+          - artifact:
+              kind: signal_event
+              id: id
+            field: field
+          label: label
+          category: signal
+      properties:
+        summary:
+          type: string
+        rules:
+          items:
+            $ref: "#/components/schemas/ExplanationRule"
+          type: array
+        features:
+          items:
+            $ref: "#/components/schemas/ExplanationFeature"
+          type: array
+      required:
+      - summary
+    Guardrail:
+      example:
+        rule_id: rule_id
+        label: label
+      properties:
+        rule_id:
+          type: string
+        label:
+          type: string
+      required:
+      - label
+      - rule_id
+    ScoreResult:
+      example:
+        subject_id: subject_id
+        summary: summary
+        score: 0.8008281904610115
+        ruleset_version: ruleset_version
+        contributions:
+        - rule_id: rule_id
+          applied_floor: 5.962133916683182
+          notes: notes
+          evidence:
+          - artifact:
+              kind: signal_event
+              id: id
+            field: field
+          - artifact:
+              kind: signal_event
+              id: id
+            field: field
+          label: label
+          category: signal
+          value: 6.027456183070403
+          key: key
+          applied_cap: 1.4658129805029452
+        - rule_id: rule_id
+          applied_floor: 5.962133916683182
+          notes: notes
+          evidence:
+          - artifact:
+              kind: signal_event
+              id: id
+            field: field
+          - artifact:
+              kind: signal_event
+              id: id
+            field: field
+          label: label
+          category: signal
+          value: 6.027456183070403
+          key: key
+          applied_cap: 1.4658129805029452
+        confidence: 5.637376656633329
+        id: id
+        band: low
+        explanation:
+          summary: summary
+          features:
+          - unit: unit
+            name: name
+            value: 1.4894159098541704
+          - unit: unit
+            name: name
+            value: 1.4894159098541704
+          rules:
+          - rule_id: rule_id
+            contribution: 1.0246457001441578
+            notes: notes
+            feature: feature
+            evidence:
+            - artifact:
+                kind: signal_event
+                id: id
+              field: field
+            - artifact:
+                kind: signal_event
+                id: id
+              field: field
+            label: label
+            category: signal
+          - rule_id: rule_id
+            contribution: 1.0246457001441578
+            notes: notes
+            feature: feature
+            evidence:
+            - artifact:
+                kind: signal_event
+                id: id
+              field: field
+            - artifact:
+                kind: signal_event
+                id: id
+              field: field
+            label: label
+            category: signal
+        evaluated_at: 2000-01-23T04:56:07.000+00:00
+        snapshot:
+          kind: signal_event
+          id: id
+      properties:
+        id:
+          type: string
+        subject_id:
+          type: string
+        ruleset_version:
+          type: string
+        evaluated_at:
+          format: date-time
+          type: string
+        snapshot:
+          $ref: "#/components/schemas/ArtifactRef"
+        score:
+          type: number
+        band:
+          enum:
+          - low
+          - elevated
+          - high
+          - critical
+          type: string
+        contributions:
+          items:
+            $ref: "#/components/schemas/ScoreContribution"
+          type: array
+        summary:
+          type: string
+        explanation:
+          $ref: "#/components/schemas/ScoreExplanation"
+        confidence:
+          type: number
+      required:
+      - band
+      - evaluated_at
+      - id
+      - ruleset_version
+      - score
+      - snapshot
+      - subject_id
+    RecommendationExplanation:
+      example:
+        summary: summary
+        score: 1.2315135367772556
+        features:
+        - unit: unit
+          name: name
+          value: 1.4894159098541704
+        - unit: unit
+          name: name
+          value: 1.4894159098541704
+        recommendation_reason: recommendation_reason
+        additional_reasons:
+        - null
+        - null
+        guardrails:
+        - rule_id: rule_id
+          label: label
+        - rule_id: rule_id
+          label: label
+        rules:
+        - rule_id: rule_id
+          contribution: 1.0246457001441578
+          notes: notes
+          feature: feature
+          evidence:
+          - artifact:
+              kind: signal_event
+              id: id
+            field: field
+          - artifact:
+              kind: signal_event
+              id: id
+            field: field
+          label: label
+          category: signal
+        - rule_id: rule_id
+          contribution: 1.0246457001441578
+          notes: notes
+          feature: feature
+          evidence:
+          - artifact:
+              kind: signal_event
+              id: id
+            field: field
+          - artifact:
+              kind: signal_event
+              id: id
+            field: field
+          label: label
+          category: signal
+        band: low
+        primary_reason: null
+      properties:
+        summary:
+          type: string
+        recommendation_reason:
+          type: string
+        primary_reason:
+          $ref: "#/components/schemas/RecommendationReasonCode"
+        additional_reasons:
+          items:
+            $ref: "#/components/schemas/RecommendationReasonCode"
+          type: array
+        score:
+          type: number
+        band:
+          enum:
+          - low
+          - elevated
+          - high
+          - critical
+          type: string
+        rules:
+          items:
+            $ref: "#/components/schemas/ExplanationRule"
+          type: array
+        features:
+          items:
+            $ref: "#/components/schemas/ExplanationFeature"
+          type: array
+        guardrails:
+          items:
+            $ref: "#/components/schemas/Guardrail"
+          type: array
+      required:
+      - band
+      - primary_reason
+      - recommendation_reason
+      - score
+      - summary
+    Recommendation:
+      example:
+        subject_id: subject_id
+        additional_reasons:
+        - null
+        - null
+        confidence: 7.386281948385884
+        type: allow
+        explanation:
+          summary: summary
+          score: 1.2315135367772556
+          features:
+          - unit: unit
+            name: name
+            value: 1.4894159098541704
+          - unit: unit
+            name: name
+            value: 1.4894159098541704
+          recommendation_reason: recommendation_reason
+          additional_reasons:
+          - null
+          - null
+          guardrails:
+          - rule_id: rule_id
+            label: label
+          - rule_id: rule_id
+            label: label
+          rules:
+          - rule_id: rule_id
+            contribution: 1.0246457001441578
+            notes: notes
+            feature: feature
+            evidence:
+            - artifact:
+                kind: signal_event
+                id: id
+              field: field
+            - artifact:
+                kind: signal_event
+                id: id
+              field: field
+            label: label
+            category: signal
+          - rule_id: rule_id
+            contribution: 1.0246457001441578
+            notes: notes
+            feature: feature
+            evidence:
+            - artifact:
+                kind: signal_event
+                id: id
+              field: field
+            - artifact:
+                kind: signal_event
+                id: id
+              field: field
+            label: label
+            category: signal
+          band: low
+          primary_reason: null
+        rationale: rationale
+        primary_reason: null
+        score_result:
+          kind: signal_event
+          id: id
+        policy_version: policy_version
+        expires_at: 2000-01-23T04:56:07.000+00:00
+        recommended_at: 2000-01-23T04:56:07.000+00:00
+        guardrails:
+        - rule_id: rule_id
+          label: label
+        - rule_id: rule_id
+          label: label
+        id: id
+        review_by: 2000-01-23T04:56:07.000+00:00
+      properties:
+        id:
+          type: string
+        subject_id:
+          type: string
+        recommended_at:
+          format: date-time
+          type: string
+        policy_version:
+          type: string
+        type:
+          enum:
+          - allow
+          - monitor
+          - review
+          - throttle
+          - escalate
+          type: string
+        confidence:
+          type: number
+        rationale:
+          type: string
+        primary_reason:
+          $ref: "#/components/schemas/RecommendationReasonCode"
+        additional_reasons:
+          items:
+            $ref: "#/components/schemas/RecommendationReasonCode"
+          type: array
+        explanation:
+          $ref: "#/components/schemas/RecommendationExplanation"
+        score_result:
+          $ref: "#/components/schemas/ArtifactRef"
+        guardrails:
+          items:
+            $ref: "#/components/schemas/Guardrail"
+          type: array
+        expires_at:
+          format: date-time
+          type: string
+        review_by:
+          format: date-time
+          type: string
+      required:
+      - confidence
+      - id
+      - policy_version
+      - primary_reason
+      - rationale
+      - recommended_at
+      - score_result
+      - subject_id
+      - type
+    EvaluationRun:
+      example:
+        subject_id: subject_id
+        trigger_ref: trigger_ref
+        trigger_type: ingest
+        snapshot_ref:
+          kind: signal_event
+          id: id
+        previous_evaluation_ref:
+          kind: signal_event
+          id: id
+        completed_at: 2000-01-23T04:56:07.000+00:00
+        ruleset_version: ruleset_version
+        score_result_ref:
+          kind: signal_event
+          id: id
+        started_at: 2000-01-23T04:56:07.000+00:00
+        recommendation_ref:
+          kind: signal_event
+          id: id
+        id: id
+        feature_set_version: feature_set_version
+        status: completed
+      properties:
+        id:
+          type: string
+        subject_id:
+          type: string
+        trigger_type:
+          enum:
+          - ingest
+          - recompute
+          type: string
+        trigger_ref:
+          type: string
+        ruleset_version:
+          type: string
+        feature_set_version:
+          type: string
+        started_at:
+          format: date-time
+          type: string
+        completed_at:
+          format: date-time
+          type: string
+        status:
+          enum:
+          - completed
+          - skipped
+          - failed
+          type: string
+        snapshot_ref:
+          $ref: "#/components/schemas/ArtifactRef"
+        score_result_ref:
+          $ref: "#/components/schemas/ArtifactRef"
+        recommendation_ref:
+          $ref: "#/components/schemas/ArtifactRef"
+        previous_evaluation_ref:
+          $ref: "#/components/schemas/ArtifactRef"
+      required:
+      - completed_at
+      - feature_set_version
+      - id
+      - ruleset_version
+      - started_at
+      - status
+      - subject_id
+      - trigger_type
+    ReviewOutcome:
+      example:
+        subject_id: subject_id
+        disposition: disposition
+        notes: notes
+        reviewed_at: 2000-01-23T04:56:07.000+00:00
+        id: id
+        reviewer: reviewer
+        label: confirmed_abuse
+        reviewed_object:
+          kind: signal_event
+          id: id
+      properties:
+        id:
+          type: string
+        subject_id:
+          type: string
+        reviewed_object:
+          $ref: "#/components/schemas/ArtifactRef"
+        reviewer:
+          type: string
+        label:
+          enum:
+          - confirmed_abuse
+          - false_positive
+          - no_action
+          - needs_more_context
+          type: string
+        reviewed_at:
+          format: date-time
+          type: string
+        notes:
+          type: string
+        disposition:
+          type: string
+      required:
+      - id
+      - label
+      - reviewed_at
+      - reviewed_object
+      - reviewer
+      - subject_id
+    OutcomeClassification:
+      enum:
+      - matched
+      - escalated_too_far
+      - escalated_too_little
+      - insufficient_data
+      - indeterminate
+      type: string
+    OutcomeAnalysisFilter:
+      example:
+        subject_id: subject_id
+        recommendation_type: allow
+        review_label: confirmed_abuse
+      properties:
+        subject_id:
+          type: string
+        recommendation_type:
+          enum:
+          - allow
+          - monitor
+          - review
+          - throttle
+          - escalate
+          type: string
+        review_label:
+          enum:
+          - confirmed_abuse
+          - false_positive
+          - no_action
+          - needs_more_context
+          type: string
+    OutcomeComparison:
+      example:
+        subject_id: subject_id
+        recommendation_type: allow
+        review_outcome:
+          subject_id: subject_id
+          disposition: disposition
+          notes: notes
+          reviewed_at: 2000-01-23T04:56:07.000+00:00
+          id: id
+          reviewer: reviewer
+          label: confirmed_abuse
+          reviewed_object:
+            kind: signal_event
+            id: id
+        review_label: confirmed_abuse
+        additional_reasons:
+        - null
+        - null
+        outcome_classification: null
+        recommendation:
+          subject_id: subject_id
+          additional_reasons:
+          - null
+          - null
+          confidence: 7.386281948385884
+          type: allow
+          explanation:
+            summary: summary
+            score: 1.2315135367772556
+            features:
+            - unit: unit
+              name: name
+              value: 1.4894159098541704
+            - unit: unit
+              name: name
+              value: 1.4894159098541704
+            recommendation_reason: recommendation_reason
+            additional_reasons:
+            - null
+            - null
+            guardrails:
+            - rule_id: rule_id
+              label: label
+            - rule_id: rule_id
+              label: label
+            rules:
+            - rule_id: rule_id
+              contribution: 1.0246457001441578
+              notes: notes
+              feature: feature
+              evidence:
+              - artifact:
+                  kind: signal_event
+                  id: id
+                field: field
+              - artifact:
+                  kind: signal_event
+                  id: id
+                field: field
+              label: label
+              category: signal
+            - rule_id: rule_id
+              contribution: 1.0246457001441578
+              notes: notes
+              feature: feature
+              evidence:
+              - artifact:
+                  kind: signal_event
+                  id: id
+                field: field
+              - artifact:
+                  kind: signal_event
+                  id: id
+                field: field
+              label: label
+              category: signal
+            band: low
+            primary_reason: null
+          rationale: rationale
+          primary_reason: null
+          score_result:
+            kind: signal_event
+            id: id
+          policy_version: policy_version
+          expires_at: 2000-01-23T04:56:07.000+00:00
+          recommended_at: 2000-01-23T04:56:07.000+00:00
+          guardrails:
+          - rule_id: rule_id
+            label: label
+          - rule_id: rule_id
+            label: label
+          id: id
+          review_by: 2000-01-23T04:56:07.000+00:00
+        primary_reason: null
+      properties:
+        subject_id:
+          type: string
+        recommendation:
+          $ref: "#/components/schemas/Recommendation"
+        review_outcome:
+          $ref: "#/components/schemas/ReviewOutcome"
+        recommendation_type:
+          enum:
+          - allow
+          - monitor
+          - review
+          - throttle
+          - escalate
+          type: string
+        primary_reason:
+          $ref: "#/components/schemas/RecommendationReasonCode"
+        additional_reasons:
+          items:
+            $ref: "#/components/schemas/RecommendationReasonCode"
+          type: array
+        review_label:
+          enum:
+          - confirmed_abuse
+          - false_positive
+          - no_action
+          - needs_more_context
+          type: string
+        outcome_classification:
+          $ref: "#/components/schemas/OutcomeClassification"
+      required:
+      - outcome_classification
+      - review_label
+      - review_outcome
+      - subject_id
+    OutcomeCountByRecommendationType:
+      example:
+        recommendation_type: allow
+        count: 6
+      properties:
+        recommendation_type:
+          enum:
+          - allow
+          - monitor
+          - review
+          - throttle
+          - escalate
+          type: string
+        count:
+          type: integer
+      required:
+      - count
+      - recommendation_type
+    OutcomeCountByReviewLabel:
+      example:
+        review_label: confirmed_abuse
+        count: 1
+      properties:
+        review_label:
+          enum:
+          - confirmed_abuse
+          - false_positive
+          - no_action
+          - needs_more_context
+          type: string
+        count:
+          type: integer
+      required:
+      - count
+      - review_label
+    OutcomeCountByClassification:
+      example:
+        outcome_classification: matched
+        count: 5
+      properties:
+        outcome_classification:
+          $ref: "#/components/schemas/OutcomeClassification"
+        count:
+          type: integer
+      required:
+      - count
+      - outcome_classification
+    OutcomeAnalysisRow:
+      example:
+        recommendation_type: allow
+        review_label: confirmed_abuse
+        outcome_classification: null
+        count: 9
+        primary_reason: below_monitor_threshold
+      properties:
+        recommendation_type:
+          enum:
+          - allow
+          - monitor
+          - review
+          - throttle
+          - escalate
+          type: string
+        primary_reason:
+          $ref: "#/components/schemas/RecommendationReasonCode"
+        review_label:
+          enum:
+          - confirmed_abuse
+          - false_positive
+          - no_action
+          - needs_more_context
+          type: string
+        outcome_classification:
+          $ref: "#/components/schemas/OutcomeClassification"
+        count:
+          type: integer
+      required:
+      - count
+      - outcome_classification
+      - review_label
+    OutcomeReasonCodeStat:
+      example:
+        reason_code: null
+        recommendation_count: 3
+        confirmed_case_count: 2
+        clean_case_count: 4
+      properties:
+        reason_code:
+          $ref: "#/components/schemas/RecommendationReasonCode"
+        recommendation_count:
+          type: integer
+        confirmed_case_count:
+          type: integer
+        clean_case_count:
+          type: integer
+      required:
+      - clean_case_count
+      - confirmed_case_count
+      - reason_code
+      - recommendation_count
+    OutcomeAnalysisSummary:
+      example:
+        aligned_count: 5
+        review_label_counts:
+        - review_label: confirmed_abuse
+          count: 1
+        - review_label: confirmed_abuse
+          count: 1
+        classification_counts:
+        - outcome_classification: matched
+          count: 5
+        - outcome_classification: matched
+          count: 5
+        comparison_count: 0
+        recommendation_counts:
+        - recommendation_type: allow
+          count: 6
+        - recommendation_type: allow
+          count: 6
+        mismatched_count: 2
+        unresolved_count: 7
+      properties:
+        comparison_count:
+          type: integer
+        recommendation_counts:
+          items:
+            $ref: "#/components/schemas/OutcomeCountByRecommendationType"
+          type: array
+        review_label_counts:
+          items:
+            $ref: "#/components/schemas/OutcomeCountByReviewLabel"
+          type: array
+        classification_counts:
+          items:
+            $ref: "#/components/schemas/OutcomeCountByClassification"
+          type: array
+        aligned_count:
+          type: integer
+        mismatched_count:
+          type: integer
+        unresolved_count:
+          type: integer
+      required:
+      - aligned_count
+      - classification_counts
+      - comparison_count
+      - mismatched_count
+      - recommendation_counts
+      - review_label_counts
+      - unresolved_count
+    OutcomeAnalysis:
+      example:
+        filter:
+          subject_id: subject_id
+          recommendation_type: allow
+          review_label: confirmed_abuse
+        summary:
+          aligned_count: 5
+          review_label_counts:
+          - review_label: confirmed_abuse
+            count: 1
+          - review_label: confirmed_abuse
+            count: 1
+          classification_counts:
+          - outcome_classification: matched
+            count: 5
+          - outcome_classification: matched
+            count: 5
+          comparison_count: 0
+          recommendation_counts:
+          - recommendation_type: allow
+            count: 6
+          - recommendation_type: allow
+            count: 6
+          mismatched_count: 2
+          unresolved_count: 7
+        reason_code_stats:
+        - reason_code: null
+          recommendation_count: 3
+          confirmed_case_count: 2
+          clean_case_count: 4
+        - reason_code: null
+          recommendation_count: 3
+          confirmed_case_count: 2
+          clean_case_count: 4
+        comparisons:
+        - subject_id: subject_id
+          recommendation_type: allow
+          review_outcome:
+            subject_id: subject_id
+            disposition: disposition
+            notes: notes
+            reviewed_at: 2000-01-23T04:56:07.000+00:00
+            id: id
+            reviewer: reviewer
+            label: confirmed_abuse
+            reviewed_object:
+              kind: signal_event
+              id: id
+          review_label: confirmed_abuse
+          additional_reasons:
+          - null
+          - null
+          outcome_classification: null
+          recommendation:
+            subject_id: subject_id
+            additional_reasons:
+            - null
+            - null
+            confidence: 7.386281948385884
+            type: allow
+            explanation:
+              summary: summary
+              score: 1.2315135367772556
+              features:
+              - unit: unit
+                name: name
+                value: 1.4894159098541704
+              - unit: unit
+                name: name
+                value: 1.4894159098541704
+              recommendation_reason: recommendation_reason
+              additional_reasons:
+              - null
+              - null
+              guardrails:
+              - rule_id: rule_id
+                label: label
+              - rule_id: rule_id
+                label: label
+              rules:
+              - rule_id: rule_id
+                contribution: 1.0246457001441578
+                notes: notes
+                feature: feature
+                evidence:
+                - artifact:
+                    kind: signal_event
+                    id: id
+                  field: field
+                - artifact:
+                    kind: signal_event
+                    id: id
+                  field: field
+                label: label
+                category: signal
+              - rule_id: rule_id
+                contribution: 1.0246457001441578
+                notes: notes
+                feature: feature
+                evidence:
+                - artifact:
+                    kind: signal_event
+                    id: id
+                  field: field
+                - artifact:
+                    kind: signal_event
+                    id: id
+                  field: field
+                label: label
+                category: signal
+              band: low
+              primary_reason: null
+            rationale: rationale
+            primary_reason: null
+            score_result:
+              kind: signal_event
+              id: id
+            policy_version: policy_version
+            expires_at: 2000-01-23T04:56:07.000+00:00
+            recommended_at: 2000-01-23T04:56:07.000+00:00
+            guardrails:
+            - rule_id: rule_id
+              label: label
+            - rule_id: rule_id
+              label: label
+            id: id
+            review_by: 2000-01-23T04:56:07.000+00:00
+          primary_reason: null
+        - subject_id: subject_id
+          recommendation_type: allow
+          review_outcome:
+            subject_id: subject_id
+            disposition: disposition
+            notes: notes
+            reviewed_at: 2000-01-23T04:56:07.000+00:00
+            id: id
+            reviewer: reviewer
+            label: confirmed_abuse
+            reviewed_object:
+              kind: signal_event
+              id: id
+          review_label: confirmed_abuse
+          additional_reasons:
+          - null
+          - null
+          outcome_classification: null
+          recommendation:
+            subject_id: subject_id
+            additional_reasons:
+            - null
+            - null
+            confidence: 7.386281948385884
+            type: allow
+            explanation:
+              summary: summary
+              score: 1.2315135367772556
+              features:
+              - unit: unit
+                name: name
+                value: 1.4894159098541704
+              - unit: unit
+                name: name
+                value: 1.4894159098541704
+              recommendation_reason: recommendation_reason
+              additional_reasons:
+              - null
+              - null
+              guardrails:
+              - rule_id: rule_id
+                label: label
+              - rule_id: rule_id
+                label: label
+              rules:
+              - rule_id: rule_id
+                contribution: 1.0246457001441578
+                notes: notes
+                feature: feature
+                evidence:
+                - artifact:
+                    kind: signal_event
+                    id: id
+                  field: field
+                - artifact:
+                    kind: signal_event
+                    id: id
+                  field: field
+                label: label
+                category: signal
+              - rule_id: rule_id
+                contribution: 1.0246457001441578
+                notes: notes
+                feature: feature
+                evidence:
+                - artifact:
+                    kind: signal_event
+                    id: id
+                  field: field
+                - artifact:
+                    kind: signal_event
+                    id: id
+                  field: field
+                label: label
+                category: signal
+              band: low
+              primary_reason: null
+            rationale: rationale
+            primary_reason: null
+            score_result:
+              kind: signal_event
+              id: id
+            policy_version: policy_version
+            expires_at: 2000-01-23T04:56:07.000+00:00
+            recommended_at: 2000-01-23T04:56:07.000+00:00
+            guardrails:
+            - rule_id: rule_id
+              label: label
+            - rule_id: rule_id
+              label: label
+            id: id
+            review_by: 2000-01-23T04:56:07.000+00:00
+          primary_reason: null
+        rows:
+        - recommendation_type: allow
+          review_label: confirmed_abuse
+          outcome_classification: null
+          count: 9
+          primary_reason: below_monitor_threshold
+        - recommendation_type: allow
+          review_label: confirmed_abuse
+          outcome_classification: null
+          count: 9
+          primary_reason: below_monitor_threshold
+      properties:
+        filter:
+          $ref: "#/components/schemas/OutcomeAnalysisFilter"
+        summary:
+          $ref: "#/components/schemas/OutcomeAnalysisSummary"
+        rows:
+          items:
+            $ref: "#/components/schemas/OutcomeAnalysisRow"
+          type: array
+        reason_code_stats:
+          items:
+            $ref: "#/components/schemas/OutcomeReasonCodeStat"
+          type: array
+        comparisons:
+          items:
+            $ref: "#/components/schemas/OutcomeComparison"
+          type: array
+      required:
+      - comparisons
+      - filter
+      - reason_code_stats
+      - rows
+      - summary
+    ReviewTargetRef:
+      example:
+        kind: recommendation
+        id: id
+      properties:
+        kind:
+          enum:
+          - recommendation
+          - score_result
+          type: string
+        id:
+          type: string
+      required:
+      - id
+      - kind
+    ReviewOutcomeWriteRequest:
+      example:
+        disposition: disposition
+        notes: notes
+        reviewer: reviewer
+        label: confirmed_abuse
+        reviewed_object:
+          kind: recommendation
+          id: id
+      properties:
+        reviewed_object:
+          $ref: "#/components/schemas/ReviewTargetRef"
+        reviewer:
+          type: string
+        label:
+          enum:
+          - confirmed_abuse
+          - false_positive
+          - no_action
+          - needs_more_context
+          type: string
+        notes:
+          type: string
+        disposition:
+          type: string
+      required:
+      - label
+      - reviewed_object
+      - reviewer
+    FeatureSnapshot:
+      example:
+        subject_id: subject_id
+        provenance:
+        - kind: signal_event
+          id: id
+        - kind: signal_event
+          id: id
+        values:
+        - unit: unit
+          name: name
+          value: 1.4894159098541704
+        - unit: unit
+          name: name
+          value: 1.4894159098541704
+        id: id
+        windows:
+        - end_at: 2000-01-23T04:56:07.000+00:00
+          event_ids:
+          - event_ids
+          - event_ids
+          name: name
+          start_at: 2000-01-23T04:56:07.000+00:00
+        - end_at: 2000-01-23T04:56:07.000+00:00
+          event_ids:
+          - event_ids
+          - event_ids
+          name: name
+          start_at: 2000-01-23T04:56:07.000+00:00
+        evaluated_at: 2000-01-23T04:56:07.000+00:00
+        feature_set_version: feature_set_version
+        summaries:
+        - unit: unit
+          name: name
+          value: 1.4894159098541704
+        - unit: unit
+          name: name
+          value: 1.4894159098541704
+      properties:
+        id:
+          type: string
+        subject_id:
+          type: string
+        feature_set_version:
+          type: string
+        evaluated_at:
+          format: date-time
+          type: string
+        windows:
+          items:
+            $ref: "#/components/schemas/FeatureWindow"
+          type: array
+        values:
+          items:
+            $ref: "#/components/schemas/FeatureValue"
+          type: array
+        summaries:
+          items:
+            $ref: "#/components/schemas/FeatureValue"
+          type: array
+        provenance:
+          items:
+            $ref: "#/components/schemas/ArtifactRef"
+          type: array
+      required:
+      - evaluated_at
+      - feature_set_version
+      - id
+      - subject_id
+    SubjectEvaluationBundle:
+      example:
+        subject_id: subject_id
+        signal_events:
+        - subject_id: subject_id
+          severity: low
+          metadata:
+          - value: value
+            key: key
+          - value: value
+            key: key
+          subject_kind: account
+          correlation_ids:
+          - correlation_ids
+          - correlation_ids
+          producer_event_id: producer_event_id
+          confidence: 0.08008281904610115
+          signal_type: consistent_action_interval
+          schema_version: schema_version
+          occurred_at: 2000-01-23T04:56:07.000+00:00
+          unit: unit
+          ingested_at: 2000-01-23T04:56:07.000+00:00
+          producer: producer
+          normalization_version: normalization_version
+          id: id
+          value: 6.027456183070403
+          dedupe_key: dedupe_key
+        - subject_id: subject_id
+          severity: low
+          metadata:
+          - value: value
+            key: key
+          - value: value
+            key: key
+          subject_kind: account
+          correlation_ids:
+          - correlation_ids
+          - correlation_ids
+          producer_event_id: producer_event_id
+          confidence: 0.08008281904610115
+          signal_type: consistent_action_interval
+          schema_version: schema_version
+          occurred_at: 2000-01-23T04:56:07.000+00:00
+          unit: unit
+          ingested_at: 2000-01-23T04:56:07.000+00:00
+          producer: producer
+          normalization_version: normalization_version
+          id: id
+          value: 6.027456183070403
+          dedupe_key: dedupe_key
+        evaluation_run:
+          subject_id: subject_id
+          trigger_ref: trigger_ref
+          trigger_type: ingest
+          snapshot_ref:
+            kind: signal_event
+            id: id
+          previous_evaluation_ref:
+            kind: signal_event
+            id: id
+          completed_at: 2000-01-23T04:56:07.000+00:00
+          ruleset_version: ruleset_version
+          score_result_ref:
+            kind: signal_event
+            id: id
+          started_at: 2000-01-23T04:56:07.000+00:00
+          recommendation_ref:
+            kind: signal_event
+            id: id
+          id: id
+          feature_set_version: feature_set_version
+          status: completed
+        recommendation:
+          subject_id: subject_id
+          additional_reasons:
+          - null
+          - null
+          confidence: 7.386281948385884
+          type: allow
+          explanation:
+            summary: summary
+            score: 1.2315135367772556
+            features:
+            - unit: unit
+              name: name
+              value: 1.4894159098541704
+            - unit: unit
+              name: name
+              value: 1.4894159098541704
+            recommendation_reason: recommendation_reason
+            additional_reasons:
+            - null
+            - null
+            guardrails:
+            - rule_id: rule_id
+              label: label
+            - rule_id: rule_id
+              label: label
+            rules:
+            - rule_id: rule_id
+              contribution: 1.0246457001441578
+              notes: notes
+              feature: feature
+              evidence:
+              - artifact:
+                  kind: signal_event
+                  id: id
+                field: field
+              - artifact:
+                  kind: signal_event
+                  id: id
+                field: field
+              label: label
+              category: signal
+            - rule_id: rule_id
+              contribution: 1.0246457001441578
+              notes: notes
+              feature: feature
+              evidence:
+              - artifact:
+                  kind: signal_event
+                  id: id
+                field: field
+              - artifact:
+                  kind: signal_event
+                  id: id
+                field: field
+              label: label
+              category: signal
+            band: low
+            primary_reason: null
+          rationale: rationale
+          primary_reason: null
+          score_result:
+            kind: signal_event
+            id: id
+          policy_version: policy_version
+          expires_at: 2000-01-23T04:56:07.000+00:00
+          recommended_at: 2000-01-23T04:56:07.000+00:00
+          guardrails:
+          - rule_id: rule_id
+            label: label
+          - rule_id: rule_id
+            label: label
+          id: id
+          review_by: 2000-01-23T04:56:07.000+00:00
+        snapshot:
+          subject_id: subject_id
+          provenance:
+          - kind: signal_event
+            id: id
+          - kind: signal_event
+            id: id
+          values:
+          - unit: unit
+            name: name
+            value: 1.4894159098541704
+          - unit: unit
+            name: name
+            value: 1.4894159098541704
+          id: id
+          windows:
+          - end_at: 2000-01-23T04:56:07.000+00:00
+            event_ids:
+            - event_ids
+            - event_ids
+            name: name
+            start_at: 2000-01-23T04:56:07.000+00:00
+          - end_at: 2000-01-23T04:56:07.000+00:00
+            event_ids:
+            - event_ids
+            - event_ids
+            name: name
+            start_at: 2000-01-23T04:56:07.000+00:00
+          evaluated_at: 2000-01-23T04:56:07.000+00:00
+          feature_set_version: feature_set_version
+          summaries:
+          - unit: unit
+            name: name
+            value: 1.4894159098541704
+          - unit: unit
+            name: name
+            value: 1.4894159098541704
+        score_result:
+          subject_id: subject_id
+          summary: summary
+          score: 0.8008281904610115
+          ruleset_version: ruleset_version
+          contributions:
+          - rule_id: rule_id
+            applied_floor: 5.962133916683182
+            notes: notes
+            evidence:
+            - artifact:
+                kind: signal_event
+                id: id
+              field: field
+            - artifact:
+                kind: signal_event
+                id: id
+              field: field
+            label: label
+            category: signal
+            value: 6.027456183070403
+            key: key
+            applied_cap: 1.4658129805029452
+          - rule_id: rule_id
+            applied_floor: 5.962133916683182
+            notes: notes
+            evidence:
+            - artifact:
+                kind: signal_event
+                id: id
+              field: field
+            - artifact:
+                kind: signal_event
+                id: id
+              field: field
+            label: label
+            category: signal
+            value: 6.027456183070403
+            key: key
+            applied_cap: 1.4658129805029452
+          confidence: 5.637376656633329
+          id: id
+          band: low
+          explanation:
+            summary: summary
+            features:
+            - unit: unit
+              name: name
+              value: 1.4894159098541704
+            - unit: unit
+              name: name
+              value: 1.4894159098541704
+            rules:
+            - rule_id: rule_id
+              contribution: 1.0246457001441578
+              notes: notes
+              feature: feature
+              evidence:
+              - artifact:
+                  kind: signal_event
+                  id: id
+                field: field
+              - artifact:
+                  kind: signal_event
+                  id: id
+                field: field
+              label: label
+              category: signal
+            - rule_id: rule_id
+              contribution: 1.0246457001441578
+              notes: notes
+              feature: feature
+              evidence:
+              - artifact:
+                  kind: signal_event
+                  id: id
+                field: field
+              - artifact:
+                  kind: signal_event
+                  id: id
+                field: field
+              label: label
+              category: signal
+          evaluated_at: 2000-01-23T04:56:07.000+00:00
+          snapshot:
+            kind: signal_event
+            id: id
+      properties:
+        subject_id:
+          type: string
+        evaluation_run:
+          $ref: "#/components/schemas/EvaluationRun"
+        signal_events:
+          items:
+            $ref: "#/components/schemas/SignalEvent"
+          type: array
+        snapshot:
+          $ref: "#/components/schemas/FeatureSnapshot"
+        score_result:
+          $ref: "#/components/schemas/ScoreResult"
+        recommendation:
+          $ref: "#/components/schemas/Recommendation"
+      required:
+      - recommendation
+      - score_result
+      - signal_events
+      - snapshot
+      - subject_id
+    SubjectEvaluationHistory:
+      example:
+        subject_id: subject_id
+        items:
+        - subject_id: subject_id
+          signal_events:
+          - subject_id: subject_id
+            severity: low
+            metadata:
+            - value: value
+              key: key
+            - value: value
+              key: key
+            subject_kind: account
+            correlation_ids:
+            - correlation_ids
+            - correlation_ids
+            producer_event_id: producer_event_id
+            confidence: 0.08008281904610115
+            signal_type: consistent_action_interval
+            schema_version: schema_version
+            occurred_at: 2000-01-23T04:56:07.000+00:00
+            unit: unit
+            ingested_at: 2000-01-23T04:56:07.000+00:00
+            producer: producer
+            normalization_version: normalization_version
+            id: id
+            value: 6.027456183070403
+            dedupe_key: dedupe_key
+          - subject_id: subject_id
+            severity: low
+            metadata:
+            - value: value
+              key: key
+            - value: value
+              key: key
+            subject_kind: account
+            correlation_ids:
+            - correlation_ids
+            - correlation_ids
+            producer_event_id: producer_event_id
+            confidence: 0.08008281904610115
+            signal_type: consistent_action_interval
+            schema_version: schema_version
+            occurred_at: 2000-01-23T04:56:07.000+00:00
+            unit: unit
+            ingested_at: 2000-01-23T04:56:07.000+00:00
+            producer: producer
+            normalization_version: normalization_version
+            id: id
+            value: 6.027456183070403
+            dedupe_key: dedupe_key
+          evaluation_run:
+            subject_id: subject_id
+            trigger_ref: trigger_ref
+            trigger_type: ingest
+            snapshot_ref:
+              kind: signal_event
+              id: id
+            previous_evaluation_ref:
+              kind: signal_event
+              id: id
+            completed_at: 2000-01-23T04:56:07.000+00:00
+            ruleset_version: ruleset_version
+            score_result_ref:
+              kind: signal_event
+              id: id
+            started_at: 2000-01-23T04:56:07.000+00:00
+            recommendation_ref:
+              kind: signal_event
+              id: id
+            id: id
+            feature_set_version: feature_set_version
+            status: completed
+          recommendation:
+            subject_id: subject_id
+            additional_reasons:
+            - null
+            - null
+            confidence: 7.386281948385884
+            type: allow
+            explanation:
+              summary: summary
+              score: 1.2315135367772556
+              features:
+              - unit: unit
+                name: name
+                value: 1.4894159098541704
+              - unit: unit
+                name: name
+                value: 1.4894159098541704
+              recommendation_reason: recommendation_reason
+              additional_reasons:
+              - null
+              - null
+              guardrails:
+              - rule_id: rule_id
+                label: label
+              - rule_id: rule_id
+                label: label
+              rules:
+              - rule_id: rule_id
+                contribution: 1.0246457001441578
+                notes: notes
+                feature: feature
+                evidence:
+                - artifact:
+                    kind: signal_event
+                    id: id
+                  field: field
+                - artifact:
+                    kind: signal_event
+                    id: id
+                  field: field
+                label: label
+                category: signal
+              - rule_id: rule_id
+                contribution: 1.0246457001441578
+                notes: notes
+                feature: feature
+                evidence:
+                - artifact:
+                    kind: signal_event
+                    id: id
+                  field: field
+                - artifact:
+                    kind: signal_event
+                    id: id
+                  field: field
+                label: label
+                category: signal
+              band: low
+              primary_reason: null
+            rationale: rationale
+            primary_reason: null
+            score_result:
+              kind: signal_event
+              id: id
+            policy_version: policy_version
+            expires_at: 2000-01-23T04:56:07.000+00:00
+            recommended_at: 2000-01-23T04:56:07.000+00:00
+            guardrails:
+            - rule_id: rule_id
+              label: label
+            - rule_id: rule_id
+              label: label
+            id: id
+            review_by: 2000-01-23T04:56:07.000+00:00
+          snapshot:
+            subject_id: subject_id
+            provenance:
+            - kind: signal_event
+              id: id
+            - kind: signal_event
+              id: id
+            values:
+            - unit: unit
+              name: name
+              value: 1.4894159098541704
+            - unit: unit
+              name: name
+              value: 1.4894159098541704
+            id: id
+            windows:
+            - end_at: 2000-01-23T04:56:07.000+00:00
+              event_ids:
+              - event_ids
+              - event_ids
+              name: name
+              start_at: 2000-01-23T04:56:07.000+00:00
+            - end_at: 2000-01-23T04:56:07.000+00:00
+              event_ids:
+              - event_ids
+              - event_ids
+              name: name
+              start_at: 2000-01-23T04:56:07.000+00:00
+            evaluated_at: 2000-01-23T04:56:07.000+00:00
+            feature_set_version: feature_set_version
+            summaries:
+            - unit: unit
+              name: name
+              value: 1.4894159098541704
+            - unit: unit
+              name: name
+              value: 1.4894159098541704
+          score_result:
+            subject_id: subject_id
+            summary: summary
+            score: 0.8008281904610115
+            ruleset_version: ruleset_version
+            contributions:
+            - rule_id: rule_id
+              applied_floor: 5.962133916683182
+              notes: notes
+              evidence:
+              - artifact:
+                  kind: signal_event
+                  id: id
+                field: field
+              - artifact:
+                  kind: signal_event
+                  id: id
+                field: field
+              label: label
+              category: signal
+              value: 6.027456183070403
+              key: key
+              applied_cap: 1.4658129805029452
+            - rule_id: rule_id
+              applied_floor: 5.962133916683182
+              notes: notes
+              evidence:
+              - artifact:
+                  kind: signal_event
+                  id: id
+                field: field
+              - artifact:
+                  kind: signal_event
+                  id: id
+                field: field
+              label: label
+              category: signal
+              value: 6.027456183070403
+              key: key
+              applied_cap: 1.4658129805029452
+            confidence: 5.637376656633329
+            id: id
+            band: low
+            explanation:
+              summary: summary
+              features:
+              - unit: unit
+                name: name
+                value: 1.4894159098541704
+              - unit: unit
+                name: name
+                value: 1.4894159098541704
+              rules:
+              - rule_id: rule_id
+                contribution: 1.0246457001441578
+                notes: notes
+                feature: feature
+                evidence:
+                - artifact:
+                    kind: signal_event
+                    id: id
+                  field: field
+                - artifact:
+                    kind: signal_event
+                    id: id
+                  field: field
+                label: label
+                category: signal
+              - rule_id: rule_id
+                contribution: 1.0246457001441578
+                notes: notes
+                feature: feature
+                evidence:
+                - artifact:
+                    kind: signal_event
+                    id: id
+                  field: field
+                - artifact:
+                    kind: signal_event
+                    id: id
+                  field: field
+                label: label
+                category: signal
+            evaluated_at: 2000-01-23T04:56:07.000+00:00
+            snapshot:
+              kind: signal_event
+              id: id
+        - subject_id: subject_id
+          signal_events:
+          - subject_id: subject_id
+            severity: low
+            metadata:
+            - value: value
+              key: key
+            - value: value
+              key: key
+            subject_kind: account
+            correlation_ids:
+            - correlation_ids
+            - correlation_ids
+            producer_event_id: producer_event_id
+            confidence: 0.08008281904610115
+            signal_type: consistent_action_interval
+            schema_version: schema_version
+            occurred_at: 2000-01-23T04:56:07.000+00:00
+            unit: unit
+            ingested_at: 2000-01-23T04:56:07.000+00:00
+            producer: producer
+            normalization_version: normalization_version
+            id: id
+            value: 6.027456183070403
+            dedupe_key: dedupe_key
+          - subject_id: subject_id
+            severity: low
+            metadata:
+            - value: value
+              key: key
+            - value: value
+              key: key
+            subject_kind: account
+            correlation_ids:
+            - correlation_ids
+            - correlation_ids
+            producer_event_id: producer_event_id
+            confidence: 0.08008281904610115
+            signal_type: consistent_action_interval
+            schema_version: schema_version
+            occurred_at: 2000-01-23T04:56:07.000+00:00
+            unit: unit
+            ingested_at: 2000-01-23T04:56:07.000+00:00
+            producer: producer
+            normalization_version: normalization_version
+            id: id
+            value: 6.027456183070403
+            dedupe_key: dedupe_key
+          evaluation_run:
+            subject_id: subject_id
+            trigger_ref: trigger_ref
+            trigger_type: ingest
+            snapshot_ref:
+              kind: signal_event
+              id: id
+            previous_evaluation_ref:
+              kind: signal_event
+              id: id
+            completed_at: 2000-01-23T04:56:07.000+00:00
+            ruleset_version: ruleset_version
+            score_result_ref:
+              kind: signal_event
+              id: id
+            started_at: 2000-01-23T04:56:07.000+00:00
+            recommendation_ref:
+              kind: signal_event
+              id: id
+            id: id
+            feature_set_version: feature_set_version
+            status: completed
+          recommendation:
+            subject_id: subject_id
+            additional_reasons:
+            - null
+            - null
+            confidence: 7.386281948385884
+            type: allow
+            explanation:
+              summary: summary
+              score: 1.2315135367772556
+              features:
+              - unit: unit
+                name: name
+                value: 1.4894159098541704
+              - unit: unit
+                name: name
+                value: 1.4894159098541704
+              recommendation_reason: recommendation_reason
+              additional_reasons:
+              - null
+              - null
+              guardrails:
+              - rule_id: rule_id
+                label: label
+              - rule_id: rule_id
+                label: label
+              rules:
+              - rule_id: rule_id
+                contribution: 1.0246457001441578
+                notes: notes
+                feature: feature
+                evidence:
+                - artifact:
+                    kind: signal_event
+                    id: id
+                  field: field
+                - artifact:
+                    kind: signal_event
+                    id: id
+                  field: field
+                label: label
+                category: signal
+              - rule_id: rule_id
+                contribution: 1.0246457001441578
+                notes: notes
+                feature: feature
+                evidence:
+                - artifact:
+                    kind: signal_event
+                    id: id
+                  field: field
+                - artifact:
+                    kind: signal_event
+                    id: id
+                  field: field
+                label: label
+                category: signal
+              band: low
+              primary_reason: null
+            rationale: rationale
+            primary_reason: null
+            score_result:
+              kind: signal_event
+              id: id
+            policy_version: policy_version
+            expires_at: 2000-01-23T04:56:07.000+00:00
+            recommended_at: 2000-01-23T04:56:07.000+00:00
+            guardrails:
+            - rule_id: rule_id
+              label: label
+            - rule_id: rule_id
+              label: label
+            id: id
+            review_by: 2000-01-23T04:56:07.000+00:00
+          snapshot:
+            subject_id: subject_id
+            provenance:
+            - kind: signal_event
+              id: id
+            - kind: signal_event
+              id: id
+            values:
+            - unit: unit
+              name: name
+              value: 1.4894159098541704
+            - unit: unit
+              name: name
+              value: 1.4894159098541704
+            id: id
+            windows:
+            - end_at: 2000-01-23T04:56:07.000+00:00
+              event_ids:
+              - event_ids
+              - event_ids
+              name: name
+              start_at: 2000-01-23T04:56:07.000+00:00
+            - end_at: 2000-01-23T04:56:07.000+00:00
+              event_ids:
+              - event_ids
+              - event_ids
+              name: name
+              start_at: 2000-01-23T04:56:07.000+00:00
+            evaluated_at: 2000-01-23T04:56:07.000+00:00
+            feature_set_version: feature_set_version
+            summaries:
+            - unit: unit
+              name: name
+              value: 1.4894159098541704
+            - unit: unit
+              name: name
+              value: 1.4894159098541704
+          score_result:
+            subject_id: subject_id
+            summary: summary
+            score: 0.8008281904610115
+            ruleset_version: ruleset_version
+            contributions:
+            - rule_id: rule_id
+              applied_floor: 5.962133916683182
+              notes: notes
+              evidence:
+              - artifact:
+                  kind: signal_event
+                  id: id
+                field: field
+              - artifact:
+                  kind: signal_event
+                  id: id
+                field: field
+              label: label
+              category: signal
+              value: 6.027456183070403
+              key: key
+              applied_cap: 1.4658129805029452
+            - rule_id: rule_id
+              applied_floor: 5.962133916683182
+              notes: notes
+              evidence:
+              - artifact:
+                  kind: signal_event
+                  id: id
+                field: field
+              - artifact:
+                  kind: signal_event
+                  id: id
+                field: field
+              label: label
+              category: signal
+              value: 6.027456183070403
+              key: key
+              applied_cap: 1.4658129805029452
+            confidence: 5.637376656633329
+            id: id
+            band: low
+            explanation:
+              summary: summary
+              features:
+              - unit: unit
+                name: name
+                value: 1.4894159098541704
+              - unit: unit
+                name: name
+                value: 1.4894159098541704
+              rules:
+              - rule_id: rule_id
+                contribution: 1.0246457001441578
+                notes: notes
+                feature: feature
+                evidence:
+                - artifact:
+                    kind: signal_event
+                    id: id
+                  field: field
+                - artifact:
+                    kind: signal_event
+                    id: id
+                  field: field
+                label: label
+                category: signal
+              - rule_id: rule_id
+                contribution: 1.0246457001441578
+                notes: notes
+                feature: feature
+                evidence:
+                - artifact:
+                    kind: signal_event
+                    id: id
+                  field: field
+                - artifact:
+                    kind: signal_event
+                    id: id
+                  field: field
+                label: label
+                category: signal
+            evaluated_at: 2000-01-23T04:56:07.000+00:00
+            snapshot:
+              kind: signal_event
+              id: id
+      properties:
+        subject_id:
+          type: string
+        items:
+          items:
+            $ref: "#/components/schemas/SubjectEvaluationBundle"
+          type: array
+      required:
+      - items
+      - subject_id
+    SubjectSignalEventList:
+      example:
+        subject_id: subject_id
+        items:
+        - subject_id: subject_id
+          severity: low
+          metadata:
+          - value: value
+            key: key
+          - value: value
+            key: key
+          subject_kind: account
+          correlation_ids:
+          - correlation_ids
+          - correlation_ids
+          producer_event_id: producer_event_id
+          confidence: 0.08008281904610115
+          signal_type: consistent_action_interval
+          schema_version: schema_version
+          occurred_at: 2000-01-23T04:56:07.000+00:00
+          unit: unit
+          ingested_at: 2000-01-23T04:56:07.000+00:00
+          producer: producer
+          normalization_version: normalization_version
+          id: id
+          value: 6.027456183070403
+          dedupe_key: dedupe_key
+        - subject_id: subject_id
+          severity: low
+          metadata:
+          - value: value
+            key: key
+          - value: value
+            key: key
+          subject_kind: account
+          correlation_ids:
+          - correlation_ids
+          - correlation_ids
+          producer_event_id: producer_event_id
+          confidence: 0.08008281904610115
+          signal_type: consistent_action_interval
+          schema_version: schema_version
+          occurred_at: 2000-01-23T04:56:07.000+00:00
+          unit: unit
+          ingested_at: 2000-01-23T04:56:07.000+00:00
+          producer: producer
+          normalization_version: normalization_version
+          id: id
+          value: 6.027456183070403
+          dedupe_key: dedupe_key
+      properties:
+        subject_id:
+          type: string
+        items:
+          items:
+            $ref: "#/components/schemas/SignalEvent"
+          type: array
+      required:
+      - items
+      - subject_id
+    SubjectInvestigation:
+      example:
+        subject_id: subject_id
+        signal_events:
+        - subject_id: subject_id
+          severity: low
+          metadata:
+          - value: value
+            key: key
+          - value: value
+            key: key
+          subject_kind: account
+          correlation_ids:
+          - correlation_ids
+          - correlation_ids
+          producer_event_id: producer_event_id
+          confidence: 0.08008281904610115
+          signal_type: consistent_action_interval
+          schema_version: schema_version
+          occurred_at: 2000-01-23T04:56:07.000+00:00
+          unit: unit
+          ingested_at: 2000-01-23T04:56:07.000+00:00
+          producer: producer
+          normalization_version: normalization_version
+          id: id
+          value: 6.027456183070403
+          dedupe_key: dedupe_key
+        - subject_id: subject_id
+          severity: low
+          metadata:
+          - value: value
+            key: key
+          - value: value
+            key: key
+          subject_kind: account
+          correlation_ids:
+          - correlation_ids
+          - correlation_ids
+          producer_event_id: producer_event_id
+          confidence: 0.08008281904610115
+          signal_type: consistent_action_interval
+          schema_version: schema_version
+          occurred_at: 2000-01-23T04:56:07.000+00:00
+          unit: unit
+          ingested_at: 2000-01-23T04:56:07.000+00:00
+          producer: producer
+          normalization_version: normalization_version
+          id: id
+          value: 6.027456183070403
+          dedupe_key: dedupe_key
+        feature_snapshots:
+        - subject_id: subject_id
+          provenance:
+          - kind: signal_event
+            id: id
+          - kind: signal_event
+            id: id
+          values:
+          - unit: unit
+            name: name
+            value: 1.4894159098541704
+          - unit: unit
+            name: name
+            value: 1.4894159098541704
+          id: id
+          windows:
+          - end_at: 2000-01-23T04:56:07.000+00:00
+            event_ids:
+            - event_ids
+            - event_ids
+            name: name
+            start_at: 2000-01-23T04:56:07.000+00:00
+          - end_at: 2000-01-23T04:56:07.000+00:00
+            event_ids:
+            - event_ids
+            - event_ids
+            name: name
+            start_at: 2000-01-23T04:56:07.000+00:00
+          evaluated_at: 2000-01-23T04:56:07.000+00:00
+          feature_set_version: feature_set_version
+          summaries:
+          - unit: unit
+            name: name
+            value: 1.4894159098541704
+          - unit: unit
+            name: name
+            value: 1.4894159098541704
+        - subject_id: subject_id
+          provenance:
+          - kind: signal_event
+            id: id
+          - kind: signal_event
+            id: id
+          values:
+          - unit: unit
+            name: name
+            value: 1.4894159098541704
+          - unit: unit
+            name: name
+            value: 1.4894159098541704
+          id: id
+          windows:
+          - end_at: 2000-01-23T04:56:07.000+00:00
+            event_ids:
+            - event_ids
+            - event_ids
+            name: name
+            start_at: 2000-01-23T04:56:07.000+00:00
+          - end_at: 2000-01-23T04:56:07.000+00:00
+            event_ids:
+            - event_ids
+            - event_ids
+            name: name
+            start_at: 2000-01-23T04:56:07.000+00:00
+          evaluated_at: 2000-01-23T04:56:07.000+00:00
+          feature_set_version: feature_set_version
+          summaries:
+          - unit: unit
+            name: name
+            value: 1.4894159098541704
+          - unit: unit
+            name: name
+            value: 1.4894159098541704
+        latest_evaluation:
+          subject_id: subject_id
+          signal_events:
+          - subject_id: subject_id
+            severity: low
+            metadata:
+            - value: value
+              key: key
+            - value: value
+              key: key
+            subject_kind: account
+            correlation_ids:
+            - correlation_ids
+            - correlation_ids
+            producer_event_id: producer_event_id
+            confidence: 0.08008281904610115
+            signal_type: consistent_action_interval
+            schema_version: schema_version
+            occurred_at: 2000-01-23T04:56:07.000+00:00
+            unit: unit
+            ingested_at: 2000-01-23T04:56:07.000+00:00
+            producer: producer
+            normalization_version: normalization_version
+            id: id
+            value: 6.027456183070403
+            dedupe_key: dedupe_key
+          - subject_id: subject_id
+            severity: low
+            metadata:
+            - value: value
+              key: key
+            - value: value
+              key: key
+            subject_kind: account
+            correlation_ids:
+            - correlation_ids
+            - correlation_ids
+            producer_event_id: producer_event_id
+            confidence: 0.08008281904610115
+            signal_type: consistent_action_interval
+            schema_version: schema_version
+            occurred_at: 2000-01-23T04:56:07.000+00:00
+            unit: unit
+            ingested_at: 2000-01-23T04:56:07.000+00:00
+            producer: producer
+            normalization_version: normalization_version
+            id: id
+            value: 6.027456183070403
+            dedupe_key: dedupe_key
+          evaluation_run:
+            subject_id: subject_id
+            trigger_ref: trigger_ref
+            trigger_type: ingest
+            snapshot_ref:
+              kind: signal_event
+              id: id
+            previous_evaluation_ref:
+              kind: signal_event
+              id: id
+            completed_at: 2000-01-23T04:56:07.000+00:00
+            ruleset_version: ruleset_version
+            score_result_ref:
+              kind: signal_event
+              id: id
+            started_at: 2000-01-23T04:56:07.000+00:00
+            recommendation_ref:
+              kind: signal_event
+              id: id
+            id: id
+            feature_set_version: feature_set_version
+            status: completed
+          recommendation:
+            subject_id: subject_id
+            additional_reasons:
+            - null
+            - null
+            confidence: 7.386281948385884
+            type: allow
+            explanation:
+              summary: summary
+              score: 1.2315135367772556
+              features:
+              - unit: unit
+                name: name
+                value: 1.4894159098541704
+              - unit: unit
+                name: name
+                value: 1.4894159098541704
+              recommendation_reason: recommendation_reason
+              additional_reasons:
+              - null
+              - null
+              guardrails:
+              - rule_id: rule_id
+                label: label
+              - rule_id: rule_id
+                label: label
+              rules:
+              - rule_id: rule_id
+                contribution: 1.0246457001441578
+                notes: notes
+                feature: feature
+                evidence:
+                - artifact:
+                    kind: signal_event
+                    id: id
+                  field: field
+                - artifact:
+                    kind: signal_event
+                    id: id
+                  field: field
+                label: label
+                category: signal
+              - rule_id: rule_id
+                contribution: 1.0246457001441578
+                notes: notes
+                feature: feature
+                evidence:
+                - artifact:
+                    kind: signal_event
+                    id: id
+                  field: field
+                - artifact:
+                    kind: signal_event
+                    id: id
+                  field: field
+                label: label
+                category: signal
+              band: low
+              primary_reason: null
+            rationale: rationale
+            primary_reason: null
+            score_result:
+              kind: signal_event
+              id: id
+            policy_version: policy_version
+            expires_at: 2000-01-23T04:56:07.000+00:00
+            recommended_at: 2000-01-23T04:56:07.000+00:00
+            guardrails:
+            - rule_id: rule_id
+              label: label
+            - rule_id: rule_id
+              label: label
+            id: id
+            review_by: 2000-01-23T04:56:07.000+00:00
+          snapshot:
+            subject_id: subject_id
+            provenance:
+            - kind: signal_event
+              id: id
+            - kind: signal_event
+              id: id
+            values:
+            - unit: unit
+              name: name
+              value: 1.4894159098541704
+            - unit: unit
+              name: name
+              value: 1.4894159098541704
+            id: id
+            windows:
+            - end_at: 2000-01-23T04:56:07.000+00:00
+              event_ids:
+              - event_ids
+              - event_ids
+              name: name
+              start_at: 2000-01-23T04:56:07.000+00:00
+            - end_at: 2000-01-23T04:56:07.000+00:00
+              event_ids:
+              - event_ids
+              - event_ids
+              name: name
+              start_at: 2000-01-23T04:56:07.000+00:00
+            evaluated_at: 2000-01-23T04:56:07.000+00:00
+            feature_set_version: feature_set_version
+            summaries:
+            - unit: unit
+              name: name
+              value: 1.4894159098541704
+            - unit: unit
+              name: name
+              value: 1.4894159098541704
+          score_result:
+            subject_id: subject_id
+            summary: summary
+            score: 0.8008281904610115
+            ruleset_version: ruleset_version
+            contributions:
+            - rule_id: rule_id
+              applied_floor: 5.962133916683182
+              notes: notes
+              evidence:
+              - artifact:
+                  kind: signal_event
+                  id: id
+                field: field
+              - artifact:
+                  kind: signal_event
+                  id: id
+                field: field
+              label: label
+              category: signal
+              value: 6.027456183070403
+              key: key
+              applied_cap: 1.4658129805029452
+            - rule_id: rule_id
+              applied_floor: 5.962133916683182
+              notes: notes
+              evidence:
+              - artifact:
+                  kind: signal_event
+                  id: id
+                field: field
+              - artifact:
+                  kind: signal_event
+                  id: id
+                field: field
+              label: label
+              category: signal
+              value: 6.027456183070403
+              key: key
+              applied_cap: 1.4658129805029452
+            confidence: 5.637376656633329
+            id: id
+            band: low
+            explanation:
+              summary: summary
+              features:
+              - unit: unit
+                name: name
+                value: 1.4894159098541704
+              - unit: unit
+                name: name
+                value: 1.4894159098541704
+              rules:
+              - rule_id: rule_id
+                contribution: 1.0246457001441578
+                notes: notes
+                feature: feature
+                evidence:
+                - artifact:
+                    kind: signal_event
+                    id: id
+                  field: field
+                - artifact:
+                    kind: signal_event
+                    id: id
+                  field: field
+                label: label
+                category: signal
+              - rule_id: rule_id
+                contribution: 1.0246457001441578
+                notes: notes
+                feature: feature
+                evidence:
+                - artifact:
+                    kind: signal_event
+                    id: id
+                  field: field
+                - artifact:
+                    kind: signal_event
+                    id: id
+                  field: field
+                label: label
+                category: signal
+            evaluated_at: 2000-01-23T04:56:07.000+00:00
+            snapshot:
+              kind: signal_event
+              id: id
+        review_outcomes:
+        - subject_id: subject_id
+          disposition: disposition
+          notes: notes
+          reviewed_at: 2000-01-23T04:56:07.000+00:00
+          id: id
+          reviewer: reviewer
+          label: confirmed_abuse
+          reviewed_object:
+            kind: signal_event
+            id: id
+        - subject_id: subject_id
+          disposition: disposition
+          notes: notes
+          reviewed_at: 2000-01-23T04:56:07.000+00:00
+          id: id
+          reviewer: reviewer
+          label: confirmed_abuse
+          reviewed_object:
+            kind: signal_event
+            id: id
+        evaluation_runs:
+        - subject_id: subject_id
+          trigger_ref: trigger_ref
+          trigger_type: ingest
+          snapshot_ref:
+            kind: signal_event
+            id: id
+          previous_evaluation_ref:
+            kind: signal_event
+            id: id
+          completed_at: 2000-01-23T04:56:07.000+00:00
+          ruleset_version: ruleset_version
+          score_result_ref:
+            kind: signal_event
+            id: id
+          started_at: 2000-01-23T04:56:07.000+00:00
+          recommendation_ref:
+            kind: signal_event
+            id: id
+          id: id
+          feature_set_version: feature_set_version
+          status: completed
+        - subject_id: subject_id
+          trigger_ref: trigger_ref
+          trigger_type: ingest
+          snapshot_ref:
+            kind: signal_event
+            id: id
+          previous_evaluation_ref:
+            kind: signal_event
+            id: id
+          completed_at: 2000-01-23T04:56:07.000+00:00
+          ruleset_version: ruleset_version
+          score_result_ref:
+            kind: signal_event
+            id: id
+          started_at: 2000-01-23T04:56:07.000+00:00
+          recommendation_ref:
+            kind: signal_event
+            id: id
+          id: id
+          feature_set_version: feature_set_version
+          status: completed
+        recommendations:
+        - subject_id: subject_id
+          additional_reasons:
+          - null
+          - null
+          confidence: 7.386281948385884
+          type: allow
+          explanation:
+            summary: summary
+            score: 1.2315135367772556
+            features:
+            - unit: unit
+              name: name
+              value: 1.4894159098541704
+            - unit: unit
+              name: name
+              value: 1.4894159098541704
+            recommendation_reason: recommendation_reason
+            additional_reasons:
+            - null
+            - null
+            guardrails:
+            - rule_id: rule_id
+              label: label
+            - rule_id: rule_id
+              label: label
+            rules:
+            - rule_id: rule_id
+              contribution: 1.0246457001441578
+              notes: notes
+              feature: feature
+              evidence:
+              - artifact:
+                  kind: signal_event
+                  id: id
+                field: field
+              - artifact:
+                  kind: signal_event
+                  id: id
+                field: field
+              label: label
+              category: signal
+            - rule_id: rule_id
+              contribution: 1.0246457001441578
+              notes: notes
+              feature: feature
+              evidence:
+              - artifact:
+                  kind: signal_event
+                  id: id
+                field: field
+              - artifact:
+                  kind: signal_event
+                  id: id
+                field: field
+              label: label
+              category: signal
+            band: low
+            primary_reason: null
+          rationale: rationale
+          primary_reason: null
+          score_result:
+            kind: signal_event
+            id: id
+          policy_version: policy_version
+          expires_at: 2000-01-23T04:56:07.000+00:00
+          recommended_at: 2000-01-23T04:56:07.000+00:00
+          guardrails:
+          - rule_id: rule_id
+            label: label
+          - rule_id: rule_id
+            label: label
+          id: id
+          review_by: 2000-01-23T04:56:07.000+00:00
+        - subject_id: subject_id
+          additional_reasons:
+          - null
+          - null
+          confidence: 7.386281948385884
+          type: allow
+          explanation:
+            summary: summary
+            score: 1.2315135367772556
+            features:
+            - unit: unit
+              name: name
+              value: 1.4894159098541704
+            - unit: unit
+              name: name
+              value: 1.4894159098541704
+            recommendation_reason: recommendation_reason
+            additional_reasons:
+            - null
+            - null
+            guardrails:
+            - rule_id: rule_id
+              label: label
+            - rule_id: rule_id
+              label: label
+            rules:
+            - rule_id: rule_id
+              contribution: 1.0246457001441578
+              notes: notes
+              feature: feature
+              evidence:
+              - artifact:
+                  kind: signal_event
+                  id: id
+                field: field
+              - artifact:
+                  kind: signal_event
+                  id: id
+                field: field
+              label: label
+              category: signal
+            - rule_id: rule_id
+              contribution: 1.0246457001441578
+              notes: notes
+              feature: feature
+              evidence:
+              - artifact:
+                  kind: signal_event
+                  id: id
+                field: field
+              - artifact:
+                  kind: signal_event
+                  id: id
+                field: field
+              label: label
+              category: signal
+            band: low
+            primary_reason: null
+          rationale: rationale
+          primary_reason: null
+          score_result:
+            kind: signal_event
+            id: id
+          policy_version: policy_version
+          expires_at: 2000-01-23T04:56:07.000+00:00
+          recommended_at: 2000-01-23T04:56:07.000+00:00
+          guardrails:
+          - rule_id: rule_id
+            label: label
+          - rule_id: rule_id
+            label: label
+          id: id
+          review_by: 2000-01-23T04:56:07.000+00:00
+        outcome_comparisons:
+        - subject_id: subject_id
+          recommendation_type: allow
+          review_outcome:
+            subject_id: subject_id
+            disposition: disposition
+            notes: notes
+            reviewed_at: 2000-01-23T04:56:07.000+00:00
+            id: id
+            reviewer: reviewer
+            label: confirmed_abuse
+            reviewed_object:
+              kind: signal_event
+              id: id
+          review_label: confirmed_abuse
+          additional_reasons:
+          - null
+          - null
+          outcome_classification: null
+          recommendation:
+            subject_id: subject_id
+            additional_reasons:
+            - null
+            - null
+            confidence: 7.386281948385884
+            type: allow
+            explanation:
+              summary: summary
+              score: 1.2315135367772556
+              features:
+              - unit: unit
+                name: name
+                value: 1.4894159098541704
+              - unit: unit
+                name: name
+                value: 1.4894159098541704
+              recommendation_reason: recommendation_reason
+              additional_reasons:
+              - null
+              - null
+              guardrails:
+              - rule_id: rule_id
+                label: label
+              - rule_id: rule_id
+                label: label
+              rules:
+              - rule_id: rule_id
+                contribution: 1.0246457001441578
+                notes: notes
+                feature: feature
+                evidence:
+                - artifact:
+                    kind: signal_event
+                    id: id
+                  field: field
+                - artifact:
+                    kind: signal_event
+                    id: id
+                  field: field
+                label: label
+                category: signal
+              - rule_id: rule_id
+                contribution: 1.0246457001441578
+                notes: notes
+                feature: feature
+                evidence:
+                - artifact:
+                    kind: signal_event
+                    id: id
+                  field: field
+                - artifact:
+                    kind: signal_event
+                    id: id
+                  field: field
+                label: label
+                category: signal
+              band: low
+              primary_reason: null
+            rationale: rationale
+            primary_reason: null
+            score_result:
+              kind: signal_event
+              id: id
+            policy_version: policy_version
+            expires_at: 2000-01-23T04:56:07.000+00:00
+            recommended_at: 2000-01-23T04:56:07.000+00:00
+            guardrails:
+            - rule_id: rule_id
+              label: label
+            - rule_id: rule_id
+              label: label
+            id: id
+            review_by: 2000-01-23T04:56:07.000+00:00
+          primary_reason: null
+        - subject_id: subject_id
+          recommendation_type: allow
+          review_outcome:
+            subject_id: subject_id
+            disposition: disposition
+            notes: notes
+            reviewed_at: 2000-01-23T04:56:07.000+00:00
+            id: id
+            reviewer: reviewer
+            label: confirmed_abuse
+            reviewed_object:
+              kind: signal_event
+              id: id
+          review_label: confirmed_abuse
+          additional_reasons:
+          - null
+          - null
+          outcome_classification: null
+          recommendation:
+            subject_id: subject_id
+            additional_reasons:
+            - null
+            - null
+            confidence: 7.386281948385884
+            type: allow
+            explanation:
+              summary: summary
+              score: 1.2315135367772556
+              features:
+              - unit: unit
+                name: name
+                value: 1.4894159098541704
+              - unit: unit
+                name: name
+                value: 1.4894159098541704
+              recommendation_reason: recommendation_reason
+              additional_reasons:
+              - null
+              - null
+              guardrails:
+              - rule_id: rule_id
+                label: label
+              - rule_id: rule_id
+                label: label
+              rules:
+              - rule_id: rule_id
+                contribution: 1.0246457001441578
+                notes: notes
+                feature: feature
+                evidence:
+                - artifact:
+                    kind: signal_event
+                    id: id
+                  field: field
+                - artifact:
+                    kind: signal_event
+                    id: id
+                  field: field
+                label: label
+                category: signal
+              - rule_id: rule_id
+                contribution: 1.0246457001441578
+                notes: notes
+                feature: feature
+                evidence:
+                - artifact:
+                    kind: signal_event
+                    id: id
+                  field: field
+                - artifact:
+                    kind: signal_event
+                    id: id
+                  field: field
+                label: label
+                category: signal
+              band: low
+              primary_reason: null
+            rationale: rationale
+            primary_reason: null
+            score_result:
+              kind: signal_event
+              id: id
+            policy_version: policy_version
+            expires_at: 2000-01-23T04:56:07.000+00:00
+            recommended_at: 2000-01-23T04:56:07.000+00:00
+            guardrails:
+            - rule_id: rule_id
+              label: label
+            - rule_id: rule_id
+              label: label
+            id: id
+            review_by: 2000-01-23T04:56:07.000+00:00
+          primary_reason: null
+        score_results:
+        - subject_id: subject_id
+          summary: summary
+          score: 0.8008281904610115
+          ruleset_version: ruleset_version
+          contributions:
+          - rule_id: rule_id
+            applied_floor: 5.962133916683182
+            notes: notes
+            evidence:
+            - artifact:
+                kind: signal_event
+                id: id
+              field: field
+            - artifact:
+                kind: signal_event
+                id: id
+              field: field
+            label: label
+            category: signal
+            value: 6.027456183070403
+            key: key
+            applied_cap: 1.4658129805029452
+          - rule_id: rule_id
+            applied_floor: 5.962133916683182
+            notes: notes
+            evidence:
+            - artifact:
+                kind: signal_event
+                id: id
+              field: field
+            - artifact:
+                kind: signal_event
+                id: id
+              field: field
+            label: label
+            category: signal
+            value: 6.027456183070403
+            key: key
+            applied_cap: 1.4658129805029452
+          confidence: 5.637376656633329
+          id: id
+          band: low
+          explanation:
+            summary: summary
+            features:
+            - unit: unit
+              name: name
+              value: 1.4894159098541704
+            - unit: unit
+              name: name
+              value: 1.4894159098541704
+            rules:
+            - rule_id: rule_id
+              contribution: 1.0246457001441578
+              notes: notes
+              feature: feature
+              evidence:
+              - artifact:
+                  kind: signal_event
+                  id: id
+                field: field
+              - artifact:
+                  kind: signal_event
+                  id: id
+                field: field
+              label: label
+              category: signal
+            - rule_id: rule_id
+              contribution: 1.0246457001441578
+              notes: notes
+              feature: feature
+              evidence:
+              - artifact:
+                  kind: signal_event
+                  id: id
+                field: field
+              - artifact:
+                  kind: signal_event
+                  id: id
+                field: field
+              label: label
+              category: signal
+          evaluated_at: 2000-01-23T04:56:07.000+00:00
+          snapshot:
+            kind: signal_event
+            id: id
+        - subject_id: subject_id
+          summary: summary
+          score: 0.8008281904610115
+          ruleset_version: ruleset_version
+          contributions:
+          - rule_id: rule_id
+            applied_floor: 5.962133916683182
+            notes: notes
+            evidence:
+            - artifact:
+                kind: signal_event
+                id: id
+              field: field
+            - artifact:
+                kind: signal_event
+                id: id
+              field: field
+            label: label
+            category: signal
+            value: 6.027456183070403
+            key: key
+            applied_cap: 1.4658129805029452
+          - rule_id: rule_id
+            applied_floor: 5.962133916683182
+            notes: notes
+            evidence:
+            - artifact:
+                kind: signal_event
+                id: id
+              field: field
+            - artifact:
+                kind: signal_event
+                id: id
+              field: field
+            label: label
+            category: signal
+            value: 6.027456183070403
+            key: key
+            applied_cap: 1.4658129805029452
+          confidence: 5.637376656633329
+          id: id
+          band: low
+          explanation:
+            summary: summary
+            features:
+            - unit: unit
+              name: name
+              value: 1.4894159098541704
+            - unit: unit
+              name: name
+              value: 1.4894159098541704
+            rules:
+            - rule_id: rule_id
+              contribution: 1.0246457001441578
+              notes: notes
+              feature: feature
+              evidence:
+              - artifact:
+                  kind: signal_event
+                  id: id
+                field: field
+              - artifact:
+                  kind: signal_event
+                  id: id
+                field: field
+              label: label
+              category: signal
+            - rule_id: rule_id
+              contribution: 1.0246457001441578
+              notes: notes
+              feature: feature
+              evidence:
+              - artifact:
+                  kind: signal_event
+                  id: id
+                field: field
+              - artifact:
+                  kind: signal_event
+                  id: id
+                field: field
+              label: label
+              category: signal
+          evaluated_at: 2000-01-23T04:56:07.000+00:00
+          snapshot:
+            kind: signal_event
+            id: id
+      properties:
+        subject_id:
+          type: string
+        latest_evaluation:
+          $ref: "#/components/schemas/SubjectEvaluationBundle"
+        signal_events:
+          items:
+            $ref: "#/components/schemas/SignalEvent"
+          type: array
+        feature_snapshots:
+          items:
+            $ref: "#/components/schemas/FeatureSnapshot"
+          type: array
+        score_results:
+          items:
+            $ref: "#/components/schemas/ScoreResult"
+          type: array
+        recommendations:
+          items:
+            $ref: "#/components/schemas/Recommendation"
+          type: array
+        evaluation_runs:
+          items:
+            $ref: "#/components/schemas/EvaluationRun"
+          type: array
+        review_outcomes:
+          items:
+            $ref: "#/components/schemas/ReviewOutcome"
+          type: array
+        outcome_comparisons:
+          items:
+            $ref: "#/components/schemas/OutcomeComparison"
+          type: array
+      required:
+      - subject_id
+    RecommendationReasonCode:
+      description: |
+        Structured reason code that explains why a specific recommendation outcome was chosen.
+
+        - `below_monitor_threshold`: Score is below the monitoring threshold; allow is recommended
+        - `monitor_threshold_crossed`: Score crossed the monitoring threshold but not review threshold
+        - `review_threshold_crossed_corroborated`: Score crossed review threshold with sufficient corroborating evidence
+        - `insufficient_corroboration`: Score crossed review threshold but lacked corroborating evidence from multiple signal families
+        - `dominant_signal_suppression`: Score crossed review threshold but one contribution dominated the total score
+        - `low_sample_guardrail_applied`: Score contributions were capped due to insufficient sample size
+        - `low_confidence_guardrail_applied`: Score contributions were dampened due to low confidence signals
+      enum:
+      - below_monitor_threshold
+      - monitor_threshold_crossed
+      - review_threshold_crossed_corroborated
+      - insufficient_corroboration
+      - dominant_signal_suppression
+      - low_sample_guardrail_applied
+      - low_confidence_guardrail_applied
+      type: string
+    RulesetComparison:
+      example:
+        subject_id: subject_id
+        candidate_ruleset_version: candidate_ruleset_version
+        candidate:
+          subject_id: subject_id
+          signal_events:
+          - subject_id: subject_id
+            severity: low
+            metadata:
+            - value: value
+              key: key
+            - value: value
+              key: key
+            subject_kind: account
+            correlation_ids:
+            - correlation_ids
+            - correlation_ids
+            producer_event_id: producer_event_id
+            confidence: 0.08008281904610115
+            signal_type: consistent_action_interval
+            schema_version: schema_version
+            occurred_at: 2000-01-23T04:56:07.000+00:00
+            unit: unit
+            ingested_at: 2000-01-23T04:56:07.000+00:00
+            producer: producer
+            normalization_version: normalization_version
+            id: id
+            value: 6.027456183070403
+            dedupe_key: dedupe_key
+          - subject_id: subject_id
+            severity: low
+            metadata:
+            - value: value
+              key: key
+            - value: value
+              key: key
+            subject_kind: account
+            correlation_ids:
+            - correlation_ids
+            - correlation_ids
+            producer_event_id: producer_event_id
+            confidence: 0.08008281904610115
+            signal_type: consistent_action_interval
+            schema_version: schema_version
+            occurred_at: 2000-01-23T04:56:07.000+00:00
+            unit: unit
+            ingested_at: 2000-01-23T04:56:07.000+00:00
+            producer: producer
+            normalization_version: normalization_version
+            id: id
+            value: 6.027456183070403
+            dedupe_key: dedupe_key
+          evaluation_run:
+            subject_id: subject_id
+            trigger_ref: trigger_ref
+            trigger_type: ingest
+            snapshot_ref:
+              kind: signal_event
+              id: id
+            previous_evaluation_ref:
+              kind: signal_event
+              id: id
+            completed_at: 2000-01-23T04:56:07.000+00:00
+            ruleset_version: ruleset_version
+            score_result_ref:
+              kind: signal_event
+              id: id
+            started_at: 2000-01-23T04:56:07.000+00:00
+            recommendation_ref:
+              kind: signal_event
+              id: id
+            id: id
+            feature_set_version: feature_set_version
+            status: completed
+          recommendation:
+            subject_id: subject_id
+            additional_reasons:
+            - null
+            - null
+            confidence: 7.386281948385884
+            type: allow
+            explanation:
+              summary: summary
+              score: 1.2315135367772556
+              features:
+              - unit: unit
+                name: name
+                value: 1.4894159098541704
+              - unit: unit
+                name: name
+                value: 1.4894159098541704
+              recommendation_reason: recommendation_reason
+              additional_reasons:
+              - null
+              - null
+              guardrails:
+              - rule_id: rule_id
+                label: label
+              - rule_id: rule_id
+                label: label
+              rules:
+              - rule_id: rule_id
+                contribution: 1.0246457001441578
+                notes: notes
+                feature: feature
+                evidence:
+                - artifact:
+                    kind: signal_event
+                    id: id
+                  field: field
+                - artifact:
+                    kind: signal_event
+                    id: id
+                  field: field
+                label: label
+                category: signal
+              - rule_id: rule_id
+                contribution: 1.0246457001441578
+                notes: notes
+                feature: feature
+                evidence:
+                - artifact:
+                    kind: signal_event
+                    id: id
+                  field: field
+                - artifact:
+                    kind: signal_event
+                    id: id
+                  field: field
+                label: label
+                category: signal
+              band: low
+              primary_reason: null
+            rationale: rationale
+            primary_reason: null
+            score_result:
+              kind: signal_event
+              id: id
+            policy_version: policy_version
+            expires_at: 2000-01-23T04:56:07.000+00:00
+            recommended_at: 2000-01-23T04:56:07.000+00:00
+            guardrails:
+            - rule_id: rule_id
+              label: label
+            - rule_id: rule_id
+              label: label
+            id: id
+            review_by: 2000-01-23T04:56:07.000+00:00
+          snapshot:
+            subject_id: subject_id
+            provenance:
+            - kind: signal_event
+              id: id
+            - kind: signal_event
+              id: id
+            values:
+            - unit: unit
+              name: name
+              value: 1.4894159098541704
+            - unit: unit
+              name: name
+              value: 1.4894159098541704
+            id: id
+            windows:
+            - end_at: 2000-01-23T04:56:07.000+00:00
+              event_ids:
+              - event_ids
+              - event_ids
+              name: name
+              start_at: 2000-01-23T04:56:07.000+00:00
+            - end_at: 2000-01-23T04:56:07.000+00:00
+              event_ids:
+              - event_ids
+              - event_ids
+              name: name
+              start_at: 2000-01-23T04:56:07.000+00:00
+            evaluated_at: 2000-01-23T04:56:07.000+00:00
+            feature_set_version: feature_set_version
+            summaries:
+            - unit: unit
+              name: name
+              value: 1.4894159098541704
+            - unit: unit
+              name: name
+              value: 1.4894159098541704
+          score_result:
+            subject_id: subject_id
+            summary: summary
+            score: 0.8008281904610115
+            ruleset_version: ruleset_version
+            contributions:
+            - rule_id: rule_id
+              applied_floor: 5.962133916683182
+              notes: notes
+              evidence:
+              - artifact:
+                  kind: signal_event
+                  id: id
+                field: field
+              - artifact:
+                  kind: signal_event
+                  id: id
+                field: field
+              label: label
+              category: signal
+              value: 6.027456183070403
+              key: key
+              applied_cap: 1.4658129805029452
+            - rule_id: rule_id
+              applied_floor: 5.962133916683182
+              notes: notes
+              evidence:
+              - artifact:
+                  kind: signal_event
+                  id: id
+                field: field
+              - artifact:
+                  kind: signal_event
+                  id: id
+                field: field
+              label: label
+              category: signal
+              value: 6.027456183070403
+              key: key
+              applied_cap: 1.4658129805029452
+            confidence: 5.637376656633329
+            id: id
+            band: low
+            explanation:
+              summary: summary
+              features:
+              - unit: unit
+                name: name
+                value: 1.4894159098541704
+              - unit: unit
+                name: name
+                value: 1.4894159098541704
+              rules:
+              - rule_id: rule_id
+                contribution: 1.0246457001441578
+                notes: notes
+                feature: feature
+                evidence:
+                - artifact:
+                    kind: signal_event
+                    id: id
+                  field: field
+                - artifact:
+                    kind: signal_event
+                    id: id
+                  field: field
+                label: label
+                category: signal
+              - rule_id: rule_id
+                contribution: 1.0246457001441578
+                notes: notes
+                feature: feature
+                evidence:
+                - artifact:
+                    kind: signal_event
+                    id: id
+                  field: field
+                - artifact:
+                    kind: signal_event
+                    id: id
+                  field: field
+                label: label
+                category: signal
+            evaluated_at: 2000-01-23T04:56:07.000+00:00
+            snapshot:
+              kind: signal_event
+              id: id
+        baseline:
+          subject_id: subject_id
+          signal_events:
+          - subject_id: subject_id
+            severity: low
+            metadata:
+            - value: value
+              key: key
+            - value: value
+              key: key
+            subject_kind: account
+            correlation_ids:
+            - correlation_ids
+            - correlation_ids
+            producer_event_id: producer_event_id
+            confidence: 0.08008281904610115
+            signal_type: consistent_action_interval
+            schema_version: schema_version
+            occurred_at: 2000-01-23T04:56:07.000+00:00
+            unit: unit
+            ingested_at: 2000-01-23T04:56:07.000+00:00
+            producer: producer
+            normalization_version: normalization_version
+            id: id
+            value: 6.027456183070403
+            dedupe_key: dedupe_key
+          - subject_id: subject_id
+            severity: low
+            metadata:
+            - value: value
+              key: key
+            - value: value
+              key: key
+            subject_kind: account
+            correlation_ids:
+            - correlation_ids
+            - correlation_ids
+            producer_event_id: producer_event_id
+            confidence: 0.08008281904610115
+            signal_type: consistent_action_interval
+            schema_version: schema_version
+            occurred_at: 2000-01-23T04:56:07.000+00:00
+            unit: unit
+            ingested_at: 2000-01-23T04:56:07.000+00:00
+            producer: producer
+            normalization_version: normalization_version
+            id: id
+            value: 6.027456183070403
+            dedupe_key: dedupe_key
+          evaluation_run:
+            subject_id: subject_id
+            trigger_ref: trigger_ref
+            trigger_type: ingest
+            snapshot_ref:
+              kind: signal_event
+              id: id
+            previous_evaluation_ref:
+              kind: signal_event
+              id: id
+            completed_at: 2000-01-23T04:56:07.000+00:00
+            ruleset_version: ruleset_version
+            score_result_ref:
+              kind: signal_event
+              id: id
+            started_at: 2000-01-23T04:56:07.000+00:00
+            recommendation_ref:
+              kind: signal_event
+              id: id
+            id: id
+            feature_set_version: feature_set_version
+            status: completed
+          recommendation:
+            subject_id: subject_id
+            additional_reasons:
+            - null
+            - null
+            confidence: 7.386281948385884
+            type: allow
+            explanation:
+              summary: summary
+              score: 1.2315135367772556
+              features:
+              - unit: unit
+                name: name
+                value: 1.4894159098541704
+              - unit: unit
+                name: name
+                value: 1.4894159098541704
+              recommendation_reason: recommendation_reason
+              additional_reasons:
+              - null
+              - null
+              guardrails:
+              - rule_id: rule_id
+                label: label
+              - rule_id: rule_id
+                label: label
+              rules:
+              - rule_id: rule_id
+                contribution: 1.0246457001441578
+                notes: notes
+                feature: feature
+                evidence:
+                - artifact:
+                    kind: signal_event
+                    id: id
+                  field: field
+                - artifact:
+                    kind: signal_event
+                    id: id
+                  field: field
+                label: label
+                category: signal
+              - rule_id: rule_id
+                contribution: 1.0246457001441578
+                notes: notes
+                feature: feature
+                evidence:
+                - artifact:
+                    kind: signal_event
+                    id: id
+                  field: field
+                - artifact:
+                    kind: signal_event
+                    id: id
+                  field: field
+                label: label
+                category: signal
+              band: low
+              primary_reason: null
+            rationale: rationale
+            primary_reason: null
+            score_result:
+              kind: signal_event
+              id: id
+            policy_version: policy_version
+            expires_at: 2000-01-23T04:56:07.000+00:00
+            recommended_at: 2000-01-23T04:56:07.000+00:00
+            guardrails:
+            - rule_id: rule_id
+              label: label
+            - rule_id: rule_id
+              label: label
+            id: id
+            review_by: 2000-01-23T04:56:07.000+00:00
+          snapshot:
+            subject_id: subject_id
+            provenance:
+            - kind: signal_event
+              id: id
+            - kind: signal_event
+              id: id
+            values:
+            - unit: unit
+              name: name
+              value: 1.4894159098541704
+            - unit: unit
+              name: name
+              value: 1.4894159098541704
+            id: id
+            windows:
+            - end_at: 2000-01-23T04:56:07.000+00:00
+              event_ids:
+              - event_ids
+              - event_ids
+              name: name
+              start_at: 2000-01-23T04:56:07.000+00:00
+            - end_at: 2000-01-23T04:56:07.000+00:00
+              event_ids:
+              - event_ids
+              - event_ids
+              name: name
+              start_at: 2000-01-23T04:56:07.000+00:00
+            evaluated_at: 2000-01-23T04:56:07.000+00:00
+            feature_set_version: feature_set_version
+            summaries:
+            - unit: unit
+              name: name
+              value: 1.4894159098541704
+            - unit: unit
+              name: name
+              value: 1.4894159098541704
+          score_result:
+            subject_id: subject_id
+            summary: summary
+            score: 0.8008281904610115
+            ruleset_version: ruleset_version
+            contributions:
+            - rule_id: rule_id
+              applied_floor: 5.962133916683182
+              notes: notes
+              evidence:
+              - artifact:
+                  kind: signal_event
+                  id: id
+                field: field
+              - artifact:
+                  kind: signal_event
+                  id: id
+                field: field
+              label: label
+              category: signal
+              value: 6.027456183070403
+              key: key
+              applied_cap: 1.4658129805029452
+            - rule_id: rule_id
+              applied_floor: 5.962133916683182
+              notes: notes
+              evidence:
+              - artifact:
+                  kind: signal_event
+                  id: id
+                field: field
+              - artifact:
+                  kind: signal_event
+                  id: id
+                field: field
+              label: label
+              category: signal
+              value: 6.027456183070403
+              key: key
+              applied_cap: 1.4658129805029452
+            confidence: 5.637376656633329
+            id: id
+            band: low
+            explanation:
+              summary: summary
+              features:
+              - unit: unit
+                name: name
+                value: 1.4894159098541704
+              - unit: unit
+                name: name
+                value: 1.4894159098541704
+              rules:
+              - rule_id: rule_id
+                contribution: 1.0246457001441578
+                notes: notes
+                feature: feature
+                evidence:
+                - artifact:
+                    kind: signal_event
+                    id: id
+                  field: field
+                - artifact:
+                    kind: signal_event
+                    id: id
+                  field: field
+                label: label
+                category: signal
+              - rule_id: rule_id
+                contribution: 1.0246457001441578
+                notes: notes
+                feature: feature
+                evidence:
+                - artifact:
+                    kind: signal_event
+                    id: id
+                  field: field
+                - artifact:
+                    kind: signal_event
+                    id: id
+                  field: field
+                label: label
+                category: signal
+            evaluated_at: 2000-01-23T04:56:07.000+00:00
+            snapshot:
+              kind: signal_event
+              id: id
+        score_delta: 0.8008281904610115
+        recommendation_changed: true
+      properties:
+        subject_id:
+          type: string
+        candidate_ruleset_version:
+          type: string
+        baseline:
+          $ref: "#/components/schemas/SubjectEvaluationBundle"
+        candidate:
+          $ref: "#/components/schemas/SubjectEvaluationBundle"
+        score_delta:
+          type: number
+        recommendation_changed:
+          type: boolean
+      required:
+      - baseline
+      - candidate
+      - candidate_ruleset_version
+      - recommendation_changed
+      - score_delta
+      - subject_id
