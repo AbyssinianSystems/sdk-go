@@ -1,7 +1,7 @@
 /*
 AbyssForge API
 
-Importable OpenAPI document for the current AbyssForge HTTP boundary.  Current implemented routes: - GET /healthz - GET /livez - GET /readyz - POST /v1/signal-events - GET /v1/outcome-analysis - GET /v1/subjects/{subject_id}/latest-evaluation - GET /v1/subjects/{subject_id}/signal-events - GET /v1/subjects/{subject_id}/evaluations - GET /v1/subjects/{subject_id}/investigation - POST /v1/subjects/{subject_id}/review-outcomes - POST /v1/subjects/{subject_id}/recompute - POST /v1/subjects/{subject_id}/ruleset-comparisons 
+Importable OpenAPI document for the current AbyssForge HTTP boundary.  Current implemented routes: - GET /healthz - GET /livez - GET /readyz - POST /v1/signal-events - GET /v1/outcome-analysis - GET /v1/subjects/{subject_id}/latest-evaluation - GET /v1/subjects/{subject_id}/signal-events - GET /v1/subjects/{subject_id}/evaluations - GET /v1/subjects/{subject_id}/investigation - POST /v1/subjects/{subject_id}/review-outcomes - POST /v1/subjects/{subject_id}/recompute - POST /v1/subjects/{subject_id}/ruleset-comparisons
 
 API version: 0.1.0
 */
@@ -11,8 +11,8 @@ API version: 0.1.0
 package client
 
 import (
-	"encoding/json"
 	"bytes"
+	"encoding/json"
 	"fmt"
 )
 
@@ -22,7 +22,7 @@ var _ MappedNullable = &ArtifactRef{}
 // ArtifactRef struct for ArtifactRef
 type ArtifactRef struct {
 	Kind string `json:"kind"`
-	Id string `json:"id"`
+	Id   string `json:"id"`
 }
 
 type _ArtifactRef ArtifactRef
@@ -95,7 +95,7 @@ func (o *ArtifactRef) SetId(v string) {
 }
 
 func (o ArtifactRef) MarshalJSON() ([]byte, error) {
-	toSerialize,err := o.ToMap()
+	toSerialize, err := o.ToMap()
 	if err != nil {
 		return []byte{}, err
 	}
@@ -122,10 +122,10 @@ func (o *ArtifactRef) UnmarshalJSON(data []byte) (err error) {
 	err = json.Unmarshal(data, &allProperties)
 
 	if err != nil {
-		return err;
+		return err
 	}
 
-	for _, requiredProperty := range(requiredProperties) {
+	for _, requiredProperty := range requiredProperties {
 		if _, exists := allProperties[requiredProperty]; !exists {
 			return fmt.Errorf("no value given for required property %v", requiredProperty)
 		}
@@ -181,5 +181,3 @@ func (v *NullableArtifactRef) UnmarshalJSON(src []byte) error {
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
-
-
