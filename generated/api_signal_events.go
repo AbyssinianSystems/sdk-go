@@ -1,7 +1,7 @@
 /*
 AbyssForge API
 
-Importable OpenAPI document for the current AbyssForge HTTP boundary.  Current implemented routes: - GET /healthz - GET /livez - GET /readyz - POST /v1/signal-events - GET /v1/outcome-analysis - GET /v1/subjects/{subject_id}/latest-evaluation - GET /v1/subjects/{subject_id}/signal-events - GET /v1/subjects/{subject_id}/evaluations - GET /v1/subjects/{subject_id}/investigation - POST /v1/subjects/{subject_id}/review-outcomes - POST /v1/subjects/{subject_id}/recompute - POST /v1/subjects/{subject_id}/ruleset-comparisons 
+Importable OpenAPI document for the current AbyssForge HTTP boundary.  All HTTP responses include an `X-Correlation-ID` header. JSON error responses also include the same value in a `correlation_id` field so clients can join retries, support tickets, and server logs to the same failing request.  Protected endpoints validate bearer token timestamps with a bounded clock-skew allowance. Operators can tune that allowance with `ABYSSFORGE_AUTH_CLOCK_SKEW_LEEWAY` when deployment clocks are not perfectly aligned.  Current implemented routes: - GET /healthz - GET /livez - GET /readyz - POST /v1/signal-events - GET /v1/outcome-analysis - GET /v1/subjects/{subject_id}/latest-evaluation - GET /v1/subjects/{subject_id}/signal-events - GET /v1/subjects/{subject_id}/evaluations - GET /v1/subjects/{subject_id}/investigation - POST /v1/subjects/{subject_id}/review-outcomes - POST /v1/subjects/{subject_id}/recompute - POST /v1/subjects/{subject_id}/ruleset-comparisons 
 
 API version: 0.1.0
 */
@@ -154,6 +154,28 @@ func (a *SignalEventsAPIService) ListSubjectSignalEventsExecute(r ApiListSubject
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
+		if localVarHTTPResponse.StatusCode == 401 {
+			var v AuthenticationError
+			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+			if err != nil {
+				newErr.error = err.Error()
+				return localVarReturnValue, localVarHTTPResponse, newErr
+			}
+					newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+					newErr.model = v
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		if localVarHTTPResponse.StatusCode == 403 {
+			var v AuthorizationError
+			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+			if err != nil {
+				newErr.error = err.Error()
+				return localVarReturnValue, localVarHTTPResponse, newErr
+			}
+					newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+					newErr.model = v
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
 		if localVarHTTPResponse.StatusCode == 404 {
 			var v IngestResult
 			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
@@ -288,6 +310,28 @@ func (a *SignalEventsAPIService) PostSignalEventExecute(r ApiPostSignalEventRequ
 		newErr := &GenericOpenAPIError{
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
+		}
+		if localVarHTTPResponse.StatusCode == 401 {
+			var v AuthenticationError
+			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+			if err != nil {
+				newErr.error = err.Error()
+				return localVarReturnValue, localVarHTTPResponse, newErr
+			}
+					newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+					newErr.model = v
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		if localVarHTTPResponse.StatusCode == 403 {
+			var v AuthorizationError
+			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+			if err != nil {
+				newErr.error = err.Error()
+				return localVarReturnValue, localVarHTTPResponse, newErr
+			}
+					newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+					newErr.model = v
+			return localVarReturnValue, localVarHTTPResponse, newErr
 		}
 		if localVarHTTPResponse.StatusCode == 400 {
 			var v IngestResult

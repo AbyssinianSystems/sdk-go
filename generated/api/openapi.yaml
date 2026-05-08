@@ -3,6 +3,14 @@ info:
   description: |
     Importable OpenAPI document for the current AbyssForge HTTP boundary.
 
+    All HTTP responses include an `X-Correlation-ID` header. JSON error responses also
+    include the same value in a `correlation_id` field so clients can join retries,
+    support tickets, and server logs to the same failing request.
+
+    Protected endpoints validate bearer token timestamps with a bounded clock-skew
+    allowance. Operators can tune that allowance with `ABYSSFORGE_AUTH_CLOCK_SKEW_LEEWAY`
+    when deployment clocks are not perfectly aligned.
+
     Current implemented routes:
     - GET /healthz
     - GET /livez
@@ -21,6 +29,8 @@ info:
 servers:
 - description: Local development server
   url: http://localhost:8080
+security:
+- BearerToken: []
 tags:
 - description: Liveness and service metadata
   name: System
@@ -45,6 +55,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
           description: Service process is live
+          headers:
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationID"
         "405":
           content:
             application/json:
@@ -59,6 +72,10 @@ paths:
               schema:
                 $ref: "#/components/schemas/IngestResult"
           description: Method not allowed
+          headers:
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationID"
+      security: []
       summary: Health check
       tags:
       - System
@@ -77,6 +94,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
           description: Service process is live
+          headers:
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationID"
         "405":
           content:
             application/json:
@@ -91,6 +111,10 @@ paths:
               schema:
                 $ref: "#/components/schemas/IngestResult"
           description: Method not allowed
+          headers:
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationID"
+      security: []
       summary: Liveness check
       tags:
       - System
@@ -111,6 +135,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
           description: Service is ready
+          headers:
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationID"
         "503":
           content:
             application/json:
@@ -119,9 +146,13 @@ paths:
                   value:
                     status: not_ready
                     store: unavailable
+                    correlation_id: corr_readyz_example_123
               schema:
                 $ref: "#/components/schemas/HealthStatus"
           description: Service is not ready
+          headers:
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationID"
         "405":
           content:
             application/json:
@@ -136,6 +167,10 @@ paths:
               schema:
                 $ref: "#/components/schemas/IngestResult"
           description: Method not allowed
+          headers:
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationID"
+      security: []
       summary: Readiness check
       tags:
       - System
@@ -254,6 +289,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/IngestResult"
           description: New canonical event accepted and subject evaluation completed
+          headers:
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationID"
         "200":
           content:
             application/json:
@@ -323,6 +361,31 @@ paths:
           description: "Duplicate event matched an existing canonical event; evaluation\
             \ is skipped when the prior evaluation already completed, or completed\
             \ inline when recovering from an earlier post-persist failure"
+          headers:
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationID"
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthenticationError"
+          description: Request missing valid bearer token
+          headers:
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationID"
+            WWW-Authenticate:
+              $ref: "#/components/headers/WWWAuthenticateUnauthorized"
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthorizationError"
+          description: Bearer token does not have required scope (signals:write)
+          headers:
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationID"
+            WWW-Authenticate:
+              $ref: "#/components/headers/WWWAuthenticateInsufficientScope"
         "400":
           content:
             application/json:
@@ -341,6 +404,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/IngestResult"
           description: Payload rejected during ingestion validation
+          headers:
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationID"
         "500":
           content:
             application/json:
@@ -355,6 +421,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/IngestResult"
           description: Persistence or evaluation failure
+          headers:
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationID"
       summary: Ingest a raw detector event
       tags:
       - Signal Events
@@ -405,18 +474,49 @@ paths:
               schema:
                 $ref: "#/components/schemas/OutcomeAnalysis"
           description: Outcome analysis read model
+          headers:
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationID"
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthenticationError"
+          description: Request missing valid bearer token
+          headers:
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationID"
+            WWW-Authenticate:
+              $ref: "#/components/headers/WWWAuthenticateUnauthorized"
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthorizationError"
+          description: Bearer token does not have required scope (evaluation:read)
+          headers:
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationID"
+            WWW-Authenticate:
+              $ref: "#/components/headers/WWWAuthenticateInsufficientScope"
         "400":
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/IngestResult"
           description: One or more query filters were invalid
+          headers:
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationID"
         "500":
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/IngestResult"
           description: The outcome analysis could not be loaded
+          headers:
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationID"
       summary: Get deterministic recommendation outcome analysis
       tags:
       - Subject Evaluations
@@ -544,12 +644,40 @@ paths:
               schema:
                 $ref: "#/components/schemas/SubjectEvaluationBundle"
           description: Latest evaluation bundle for the subject
+          headers:
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationID"
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthenticationError"
+          description: Request missing valid bearer token
+          headers:
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationID"
+            WWW-Authenticate:
+              $ref: "#/components/headers/WWWAuthenticateUnauthorized"
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthorizationError"
+          description: Bearer token does not have required scope (evaluation:read)
+          headers:
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationID"
+            WWW-Authenticate:
+              $ref: "#/components/headers/WWWAuthenticateInsufficientScope"
         "404":
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/IngestResult"
           description: No persisted evaluation exists for the subject
+          headers:
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationID"
       summary: Get the latest persisted evaluation for a subject
       tags:
       - Subject Evaluations
@@ -586,12 +714,40 @@ paths:
               schema:
                 $ref: "#/components/schemas/ReviewOutcome"
           description: Review outcome persisted
+          headers:
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationID"
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthenticationError"
+          description: Request missing valid bearer token
+          headers:
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationID"
+            WWW-Authenticate:
+              $ref: "#/components/headers/WWWAuthenticateUnauthorized"
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthorizationError"
+          description: Bearer token does not have required scope (review:write)
+          headers:
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationID"
+            WWW-Authenticate:
+              $ref: "#/components/headers/WWWAuthenticateInsufficientScope"
         "400":
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/IngestResult"
           description: Review-outcome request failed validation
+          headers:
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationID"
         "404":
           content:
             application/json:
@@ -607,6 +763,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/IngestResult"
           description: Subject or reviewed object was not found
+          headers:
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationID"
         "500":
           content:
             application/json:
@@ -621,6 +780,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/IngestResult"
           description: The latest subject evaluation could not be loaded
+          headers:
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationID"
       summary: Record a review outcome for a subject artifact
       tags:
       - Subject Evaluations
@@ -639,18 +801,49 @@ paths:
               schema:
                 $ref: "#/components/schemas/SubjectSignalEventList"
           description: Canonical signal events for the subject
+          headers:
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationID"
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthenticationError"
+          description: Request missing valid bearer token
+          headers:
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationID"
+            WWW-Authenticate:
+              $ref: "#/components/headers/WWWAuthenticateUnauthorized"
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthorizationError"
+          description: Bearer token does not have required scope (evaluation:read)
+          headers:
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationID"
+            WWW-Authenticate:
+              $ref: "#/components/headers/WWWAuthenticateInsufficientScope"
         "404":
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/IngestResult"
           description: No signal events exist for the subject
+          headers:
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationID"
         "500":
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/IngestResult"
           description: The subject signal events could not be loaded
+          headers:
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationID"
       summary: List canonical signal events for a subject
       tags:
       - Signal Events
@@ -669,18 +862,49 @@ paths:
               schema:
                 $ref: "#/components/schemas/SubjectEvaluationHistory"
           description: Evaluation history for the subject
+          headers:
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationID"
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthenticationError"
+          description: Request missing valid bearer token
+          headers:
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationID"
+            WWW-Authenticate:
+              $ref: "#/components/headers/WWWAuthenticateUnauthorized"
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthorizationError"
+          description: Bearer token does not have required scope (evaluation:read)
+          headers:
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationID"
+            WWW-Authenticate:
+              $ref: "#/components/headers/WWWAuthenticateInsufficientScope"
         "404":
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/IngestResult"
           description: No persisted evaluation exists for the subject
+          headers:
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationID"
         "500":
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/IngestResult"
           description: The subject evaluation history could not be loaded
+          headers:
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationID"
       summary: List persisted evaluations for a subject
       tags:
       - Subject Evaluations
@@ -700,18 +924,49 @@ paths:
               schema:
                 $ref: "#/components/schemas/SubjectInvestigation"
           description: Investigation read model for the subject
+          headers:
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationID"
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthenticationError"
+          description: Request missing valid bearer token
+          headers:
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationID"
+            WWW-Authenticate:
+              $ref: "#/components/headers/WWWAuthenticateUnauthorized"
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthorizationError"
+          description: Bearer token does not have required scope (evaluation:read)
+          headers:
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationID"
+            WWW-Authenticate:
+              $ref: "#/components/headers/WWWAuthenticateInsufficientScope"
         "404":
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/IngestResult"
           description: No investigation artifacts exist for the subject
+          headers:
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationID"
         "500":
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/IngestResult"
           description: The subject investigation could not be loaded
+          headers:
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationID"
       summary: Get the investigation read model for a subject
       tags:
       - Subject Evaluations
@@ -737,24 +992,58 @@ paths:
               schema:
                 $ref: "#/components/schemas/SubjectEvaluationBundle"
           description: Recomputed subject evaluation bundle
+          headers:
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationID"
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthenticationError"
+          description: Request missing valid bearer token
+          headers:
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationID"
+            WWW-Authenticate:
+              $ref: "#/components/headers/WWWAuthenticateUnauthorized"
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthorizationError"
+          description: Bearer token does not have required scope (review:write)
+          headers:
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationID"
+            WWW-Authenticate:
+              $ref: "#/components/headers/WWWAuthenticateInsufficientScope"
         "400":
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/IngestResult"
           description: The recompute request was invalid
+          headers:
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationID"
         "404":
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/IngestResult"
           description: No signal events exist for the subject
+          headers:
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationID"
         "500":
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/IngestResult"
           description: The subject recompute failed
+          headers:
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationID"
       summary: Recompute and persist a subject evaluation
       tags:
       - Subject Evaluations
@@ -779,28 +1068,94 @@ paths:
               schema:
                 $ref: "#/components/schemas/RulesetComparison"
           description: Baseline and candidate comparison for the subject
+          headers:
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationID"
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthenticationError"
+          description: Request missing valid bearer token
+          headers:
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationID"
+            WWW-Authenticate:
+              $ref: "#/components/headers/WWWAuthenticateUnauthorized"
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthorizationError"
+          description: Bearer token does not have required scope (review:write)
+          headers:
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationID"
+            WWW-Authenticate:
+              $ref: "#/components/headers/WWWAuthenticateInsufficientScope"
         "400":
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/IngestResult"
           description: The comparison request was invalid
+          headers:
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationID"
         "404":
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/IngestResult"
           description: No persisted evaluation exists for the subject
+          headers:
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationID"
         "500":
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/IngestResult"
           description: The ruleset comparison could not be completed
+          headers:
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationID"
       summary: Compare the latest evaluation with a candidate ruleset replay
       tags:
       - Subject Evaluations
 components:
+  headers:
+    CorrelationID:
+      description: Stable request correlation identifier echoed by the server.
+      explode: false
+      schema:
+        $ref: "#/components/schemas/CorrelationID"
+      style: simple
+    WWWAuthenticateUnauthorized:
+      description: |
+        RFC 6750 challenge for invalid or missing bearer tokens.
+      examples:
+        missingBearerToken:
+          value: "Bearer realm=\"abyssforge\", error=\"invalid_request\", error_description=\"\
+            missing or invalid bearer token\""
+        invalidBearerToken:
+          value: "Bearer realm=\"abyssforge\", error=\"invalid_token\", error_description=\"\
+            bearer token validation failed\""
+      explode: false
+      schema:
+        type: string
+      style: simple
+    WWWAuthenticateInsufficientScope:
+      description: |
+        RFC 6750 challenge for valid bearer token lacking required scope.
+      examples:
+        insufficientScope:
+          value: "Bearer realm=\"abyssforge\", error=\"insufficient_scope\", scope=\"\
+            signals:write\""
+      explode: false
+      schema:
+        type: string
+      style: simple
   parameters:
     SubjectID:
       description: Canonical account identifier for the scored subject
@@ -813,8 +1168,15 @@ components:
         type: string
       style: simple
   schemas:
+    CorrelationID:
+      description: Request correlation identifier echoed in the `X-Correlation-ID`
+        header and JSON error payloads.
+      maxLength: 128
+      minLength: 1
+      type: string
     HealthStatus:
       example:
+        correlation_id: correlation_id
         store: ok
         status: ok
       properties:
@@ -828,6 +1190,12 @@ components:
           enum:
           - ok
           - unavailable
+          type: string
+        correlation_id:
+          description: Request correlation identifier echoed in the `X-Correlation-ID`
+            header and JSON error payloads.
+          maxLength: 128
+          minLength: 1
           type: string
       required:
       - status
@@ -935,6 +1303,7 @@ components:
         - code: code
           field: field
           message: message
+        correlation_id: correlation_id
         event:
           subject_id: subject_id
           severity: low
@@ -979,6 +1348,12 @@ components:
           items:
             $ref: "#/components/schemas/RejectionReason"
           type: array
+        correlation_id:
+          description: Request correlation identifier echoed in the `X-Correlation-ID`
+            header and JSON error payloads.
+          maxLength: 128
+          minLength: 1
+          type: string
       required:
       - status
     EvaluationResult:
@@ -4998,3 +5373,87 @@ components:
       - recommendation_changed
       - score_delta
       - subject_id
+    AuthenticationError:
+      description: |
+        Authentication failure response returned when bearer token is missing,
+        invalid, or cannot be verified (401 Unauthorized).
+
+        Runtime challenge examples:
+        - `WWW-Authenticate: Bearer realm="abyssforge", error="invalid_request", error_description="missing or invalid bearer token"`
+        - `WWW-Authenticate: Bearer realm="abyssforge", error="invalid_token", error_description="bearer token validation failed"`
+      example:
+        status: rejected
+        reason: authentication_failed
+        correlation_id: corr_auth_example_123
+        rejection_reasons:
+        - code: missing_bearer_token
+          field: authorization
+          message: missing or invalid bearer token
+      properties:
+        status:
+          enum:
+          - rejected
+          type: string
+        reason:
+          enum:
+          - authentication_failed
+          type: string
+        rejection_reasons:
+          items:
+            $ref: "#/components/schemas/RejectionReason"
+          minItems: 1
+          type: array
+        correlation_id:
+          description: Request correlation identifier echoed in the `X-Correlation-ID`
+            header and JSON error payloads.
+          maxLength: 128
+          minLength: 1
+          type: string
+      required:
+      - reason
+      - rejection_reasons
+      - status
+    AuthorizationError:
+      description: |
+        Authorization failure response returned when the bearer token is valid
+        but does not have the required scopes (403 Forbidden).
+
+        Runtime challenge example:
+        - `WWW-Authenticate: Bearer realm="abyssforge", error="insufficient_scope", scope="<required_scope>"`
+      example:
+        status: rejected
+        reason: authorization_failed
+        correlation_id: corr_authz_example_123
+        rejection_reasons:
+        - code: insufficient_scope
+          field: authorization
+          message: required scope "signals:write" is missing
+      properties:
+        status:
+          enum:
+          - rejected
+          type: string
+        reason:
+          enum:
+          - authorization_failed
+          type: string
+        rejection_reasons:
+          items:
+            $ref: "#/components/schemas/RejectionReason"
+          minItems: 1
+          type: array
+        correlation_id:
+          description: Request correlation identifier echoed in the `X-Correlation-ID`
+            header and JSON error payloads.
+          maxLength: 128
+          minLength: 1
+          type: string
+      required:
+      - reason
+      - rejection_reasons
+      - status
+  securitySchemes:
+    BearerToken:
+      bearerFormat: JWT
+      scheme: bearer
+      type: http

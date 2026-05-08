@@ -1,7 +1,7 @@
 /*
 AbyssForge API
 
-Importable OpenAPI document for the current AbyssForge HTTP boundary.  Current implemented routes: - GET /healthz - GET /livez - GET /readyz - POST /v1/signal-events - GET /v1/outcome-analysis - GET /v1/subjects/{subject_id}/latest-evaluation - GET /v1/subjects/{subject_id}/signal-events - GET /v1/subjects/{subject_id}/evaluations - GET /v1/subjects/{subject_id}/investigation - POST /v1/subjects/{subject_id}/review-outcomes - POST /v1/subjects/{subject_id}/recompute - POST /v1/subjects/{subject_id}/ruleset-comparisons 
+Importable OpenAPI document for the current AbyssForge HTTP boundary.  All HTTP responses include an `X-Correlation-ID` header. JSON error responses also include the same value in a `correlation_id` field so clients can join retries, support tickets, and server logs to the same failing request.  Protected endpoints validate bearer token timestamps with a bounded clock-skew allowance. Operators can tune that allowance with `ABYSSFORGE_AUTH_CLOCK_SKEW_LEEWAY` when deployment clocks are not perfectly aligned.  Current implemented routes: - GET /healthz - GET /livez - GET /readyz - POST /v1/signal-events - GET /v1/outcome-analysis - GET /v1/subjects/{subject_id}/latest-evaluation - GET /v1/subjects/{subject_id}/signal-events - GET /v1/subjects/{subject_id}/evaluations - GET /v1/subjects/{subject_id}/investigation - POST /v1/subjects/{subject_id}/review-outcomes - POST /v1/subjects/{subject_id}/recompute - POST /v1/subjects/{subject_id}/ruleset-comparisons 
 
 API version: 0.1.0
 */
@@ -27,6 +27,8 @@ type IngestResult struct {
 	Event *SignalEvent `json:"event,omitempty"`
 	Evaluation *EvaluationResult `json:"evaluation,omitempty"`
 	RejectionReasons []RejectionReason `json:"rejection_reasons,omitempty"`
+	// Request correlation identifier echoed in the `X-Correlation-ID` header and JSON error payloads.
+	CorrelationId *string `json:"correlation_id,omitempty"`
 }
 
 type _IngestResult IngestResult
@@ -233,6 +235,38 @@ func (o *IngestResult) SetRejectionReasons(v []RejectionReason) {
 	o.RejectionReasons = v
 }
 
+// GetCorrelationId returns the CorrelationId field value if set, zero value otherwise.
+func (o *IngestResult) GetCorrelationId() string {
+	if o == nil || IsNil(o.CorrelationId) {
+		var ret string
+		return ret
+	}
+	return *o.CorrelationId
+}
+
+// GetCorrelationIdOk returns a tuple with the CorrelationId field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *IngestResult) GetCorrelationIdOk() (*string, bool) {
+	if o == nil || IsNil(o.CorrelationId) {
+		return nil, false
+	}
+	return o.CorrelationId, true
+}
+
+// HasCorrelationId returns a boolean if a field has been set.
+func (o *IngestResult) HasCorrelationId() bool {
+	if o != nil && !IsNil(o.CorrelationId) {
+		return true
+	}
+
+	return false
+}
+
+// SetCorrelationId gets a reference to the given string and assigns it to the CorrelationId field.
+func (o *IngestResult) SetCorrelationId(v string) {
+	o.CorrelationId = &v
+}
+
 func (o IngestResult) MarshalJSON() ([]byte, error) {
 	toSerialize,err := o.ToMap()
 	if err != nil {
@@ -258,6 +292,9 @@ func (o IngestResult) ToMap() (map[string]interface{}, error) {
 	}
 	if !IsNil(o.RejectionReasons) {
 		toSerialize["rejection_reasons"] = o.RejectionReasons
+	}
+	if !IsNil(o.CorrelationId) {
+		toSerialize["correlation_id"] = o.CorrelationId
 	}
 	return toSerialize, nil
 }

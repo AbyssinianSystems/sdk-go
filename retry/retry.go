@@ -40,12 +40,15 @@ type Policy struct {
 
 // Default is the recommended retry policy for transient failures: 3 attempts
 // with exponential backoff starting at 100 ms and capped at 5 s.
+// BEGIN generated:retry-defaults
 var Default = &Policy{
 	MaxAttempts: 3,
 	InitialWait: 100 * time.Millisecond,
-	MaxWait:     5 * time.Second,
-	Multiplier:  2.0,
+	MaxWait:     5000 * time.Millisecond,
+	Multiplier:  2,
 }
+
+// END generated:retry-defaults
 
 // Do executes fn up to p.MaxAttempts times, retrying when fn returns a
 // transient HTTP status code (429, 5xx) or a network-level error (statusCode 0).

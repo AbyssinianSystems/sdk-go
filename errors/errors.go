@@ -47,15 +47,14 @@ func (e *APIError) Error() string {
 	return fmt.Sprintf("abyssforge: API error %d reason=%s", e.StatusCode, e.Reason)
 }
 
-// IsAuthentication reports whether err is a 401 Unauthorized API error,
-// meaning the bearer token was missing or could not be verified.
+// BEGIN generated:openapi-error-predicates
+// IsAuthentication reports whether err is a 401 Unauthorized API error.
 func IsAuthentication(err error) bool {
 	var apiErr *APIError
 	return errors.As(err, &apiErr) && apiErr.StatusCode == 401
 }
 
-// IsAuthorization reports whether err is a 403 Forbidden API error,
-// meaning the bearer token is valid but lacks the required scope.
+// IsAuthorization reports whether err is a 403 Forbidden API error.
 func IsAuthorization(err error) bool {
 	var apiErr *APIError
 	return errors.As(err, &apiErr) && apiErr.StatusCode == 403
@@ -72,6 +71,7 @@ func IsNotFound(err error) bool {
 	var apiErr *APIError
 	return errors.As(err, &apiErr) && apiErr.StatusCode == 404
 }
+// END generated:openapi-error-predicates
 
 // FromError extracts an [*APIError] from a [gen.GenericOpenAPIError] returned
 // by the generated SDK client. Returns (nil, false) when err is not an API

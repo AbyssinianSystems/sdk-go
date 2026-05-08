@@ -72,6 +72,25 @@ c.SetBearerToken("your-token")
 c.ClearBearerToken()
 ```
 
+For machine-to-machine OAuth2, create an auth transport backed by
+client-credentials token exchange:
+
+```go
+src, err := auth.NewClientCredentialsSource(auth.ClientCredentialsConfig{
+    TokenURL:     "https://auth.example.com/oauth2/token",
+    ClientID:     os.Getenv("ABYSSFORGE_CLIENT_ID"),
+    ClientSecret: os.Getenv("ABYSSFORGE_CLIENT_SECRET"),
+    Scopes:       []string{"signals:write", "evaluation:read"},
+    Audience:     "abyssforge-api",
+})
+if err != nil {
+    log.Fatal(err)
+}
+
+httpClient := &http.Client{Transport: &auth.Transport{TokenSource: src}}
+c := client.New("https://abyssforge.example.com", httpClient)
+```
+
 ### Ingest a signal event
 
 ```go

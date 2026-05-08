@@ -26,7 +26,7 @@ import (
 	"context"
 	"fmt"
 	"os"
-	openapiclient "github.com/abyssforge/sdk-go"
+	openapiclient "github.com/AbyssForge/sdk-go"
 )
 
 func main() {
@@ -67,7 +67,7 @@ Name | Type | Description  | Notes
 
 ### Authorization
 
-No authorization required
+[BearerToken](../README.md#BearerToken)
 
 ### HTTP request headers
 
@@ -97,7 +97,7 @@ import (
 	"fmt"
 	"os"
     "time"
-	openapiclient "github.com/abyssforge/sdk-go"
+	openapiclient "github.com/AbyssForge/sdk-go"
 )
 
 func main() {
@@ -134,7 +134,7 @@ Name | Type | Description  | Notes
 
 ### Authorization
 
-No authorization required
+[BearerToken](../README.md#BearerToken)
 
 ### HTTP request headers
 

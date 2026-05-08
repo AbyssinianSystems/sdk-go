@@ -10,6 +10,7 @@ Name | Type | Description | Notes
 **Event** | Pointer to [**SignalEvent**](SignalEvent.md) |  | [optional] 
 **Evaluation** | Pointer to [**EvaluationResult**](EvaluationResult.md) |  | [optional] 
 **RejectionReasons** | Pointer to [**[]RejectionReason**](RejectionReason.md) |  | [optional] 
+**CorrelationId** | Pointer to **string** | Request correlation identifier echoed in the &#x60;X-Correlation-ID&#x60; header and JSON error payloads. | [optional] 
 
 ## Methods
 
@@ -174,6 +175,31 @@ SetRejectionReasons sets RejectionReasons field to given value.
 `func (o *IngestResult) HasRejectionReasons() bool`
 
 HasRejectionReasons returns a boolean if a field has been set.
+
+### GetCorrelationId
+
+`func (o *IngestResult) GetCorrelationId() string`
+
+GetCorrelationId returns the CorrelationId field if non-nil, zero value otherwise.
+
+### GetCorrelationIdOk
+
+`func (o *IngestResult) GetCorrelationIdOk() (*string, bool)`
+
+GetCorrelationIdOk returns a tuple with the CorrelationId field if it's non-nil, zero value otherwise
+and a boolean to check if the value has been set.
+
+### SetCorrelationId
+
+`func (o *IngestResult) SetCorrelationId(v string)`
+
+SetCorrelationId sets CorrelationId field to given value.
+
+### HasCorrelationId
+
+`func (o *IngestResult) HasCorrelationId() bool`
+
+HasCorrelationId returns a boolean if a field has been set.
 
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)

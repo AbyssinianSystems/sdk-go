@@ -8,6 +8,8 @@ api_system.go
 client.go
 configuration.go
 docs/ArtifactRef.md
+docs/AuthenticationError.md
+docs/AuthorizationError.md
 docs/EvaluationResult.md
 docs/EvaluationRun.md
 docs/EvidenceRef.md
@@ -54,6 +56,8 @@ docs/SubjectSignalEventList.md
 docs/SystemAPI.md
 git_push.sh
 model_artifact_ref.go
+model_authentication_error.go
+model_authorization_error.go
 model_evaluation_result.go
 model_evaluation_run.go
 model_evidence_ref.go

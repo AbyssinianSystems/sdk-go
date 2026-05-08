@@ -16,39 +16,42 @@ import (
 	"fmt"
 )
 
-// checks if the HealthStatus type satisfies the MappedNullable interface at compile time
-var _ MappedNullable = &HealthStatus{}
+// checks if the AuthorizationError type satisfies the MappedNullable interface at compile time
+var _ MappedNullable = &AuthorizationError{}
 
-// HealthStatus struct for HealthStatus
-type HealthStatus struct {
+// AuthorizationError Authorization failure response returned when the bearer token is valid but does not have the required scopes (403 Forbidden).  Runtime challenge example: - `WWW-Authenticate: Bearer realm=\"abyssforge\", error=\"insufficient_scope\", scope=\"<required_scope>\"` 
+type AuthorizationError struct {
 	Status string `json:"status"`
-	Store *string `json:"store,omitempty"`
+	Reason string `json:"reason"`
+	RejectionReasons []RejectionReason `json:"rejection_reasons"`
 	// Request correlation identifier echoed in the `X-Correlation-ID` header and JSON error payloads.
 	CorrelationId *string `json:"correlation_id,omitempty"`
 }
 
-type _HealthStatus HealthStatus
+type _AuthorizationError AuthorizationError
 
-// NewHealthStatus instantiates a new HealthStatus object
+// NewAuthorizationError instantiates a new AuthorizationError object
 // This constructor will assign default values to properties that have it defined,
 // and makes sure properties required by API are set, but the set of arguments
 // will change when the set of required properties is changed
-func NewHealthStatus(status string) *HealthStatus {
-	this := HealthStatus{}
+func NewAuthorizationError(status string, reason string, rejectionReasons []RejectionReason) *AuthorizationError {
+	this := AuthorizationError{}
 	this.Status = status
+	this.Reason = reason
+	this.RejectionReasons = rejectionReasons
 	return &this
 }
 
-// NewHealthStatusWithDefaults instantiates a new HealthStatus object
+// NewAuthorizationErrorWithDefaults instantiates a new AuthorizationError object
 // This constructor will only assign default values to properties that have it defined,
 // but it doesn't guarantee that properties required by API are set
-func NewHealthStatusWithDefaults() *HealthStatus {
-	this := HealthStatus{}
+func NewAuthorizationErrorWithDefaults() *AuthorizationError {
+	this := AuthorizationError{}
 	return &this
 }
 
 // GetStatus returns the Status field value
-func (o *HealthStatus) GetStatus() string {
+func (o *AuthorizationError) GetStatus() string {
 	if o == nil {
 		var ret string
 		return ret
@@ -59,7 +62,7 @@ func (o *HealthStatus) GetStatus() string {
 
 // GetStatusOk returns a tuple with the Status field value
 // and a boolean to check if the value has been set.
-func (o *HealthStatus) GetStatusOk() (*string, bool) {
+func (o *AuthorizationError) GetStatusOk() (*string, bool) {
 	if o == nil {
 		return nil, false
 	}
@@ -67,44 +70,60 @@ func (o *HealthStatus) GetStatusOk() (*string, bool) {
 }
 
 // SetStatus sets field value
-func (o *HealthStatus) SetStatus(v string) {
+func (o *AuthorizationError) SetStatus(v string) {
 	o.Status = v
 }
 
-// GetStore returns the Store field value if set, zero value otherwise.
-func (o *HealthStatus) GetStore() string {
-	if o == nil || IsNil(o.Store) {
+// GetReason returns the Reason field value
+func (o *AuthorizationError) GetReason() string {
+	if o == nil {
 		var ret string
 		return ret
 	}
-	return *o.Store
+
+	return o.Reason
 }
 
-// GetStoreOk returns a tuple with the Store field value if set, nil otherwise
+// GetReasonOk returns a tuple with the Reason field value
 // and a boolean to check if the value has been set.
-func (o *HealthStatus) GetStoreOk() (*string, bool) {
-	if o == nil || IsNil(o.Store) {
+func (o *AuthorizationError) GetReasonOk() (*string, bool) {
+	if o == nil {
 		return nil, false
 	}
-	return o.Store, true
+	return &o.Reason, true
 }
 
-// HasStore returns a boolean if a field has been set.
-func (o *HealthStatus) HasStore() bool {
-	if o != nil && !IsNil(o.Store) {
-		return true
+// SetReason sets field value
+func (o *AuthorizationError) SetReason(v string) {
+	o.Reason = v
+}
+
+// GetRejectionReasons returns the RejectionReasons field value
+func (o *AuthorizationError) GetRejectionReasons() []RejectionReason {
+	if o == nil {
+		var ret []RejectionReason
+		return ret
 	}
 
-	return false
+	return o.RejectionReasons
 }
 
-// SetStore gets a reference to the given string and assigns it to the Store field.
-func (o *HealthStatus) SetStore(v string) {
-	o.Store = &v
+// GetRejectionReasonsOk returns a tuple with the RejectionReasons field value
+// and a boolean to check if the value has been set.
+func (o *AuthorizationError) GetRejectionReasonsOk() ([]RejectionReason, bool) {
+	if o == nil {
+		return nil, false
+	}
+	return o.RejectionReasons, true
+}
+
+// SetRejectionReasons sets field value
+func (o *AuthorizationError) SetRejectionReasons(v []RejectionReason) {
+	o.RejectionReasons = v
 }
 
 // GetCorrelationId returns the CorrelationId field value if set, zero value otherwise.
-func (o *HealthStatus) GetCorrelationId() string {
+func (o *AuthorizationError) GetCorrelationId() string {
 	if o == nil || IsNil(o.CorrelationId) {
 		var ret string
 		return ret
@@ -114,7 +133,7 @@ func (o *HealthStatus) GetCorrelationId() string {
 
 // GetCorrelationIdOk returns a tuple with the CorrelationId field value if set, nil otherwise
 // and a boolean to check if the value has been set.
-func (o *HealthStatus) GetCorrelationIdOk() (*string, bool) {
+func (o *AuthorizationError) GetCorrelationIdOk() (*string, bool) {
 	if o == nil || IsNil(o.CorrelationId) {
 		return nil, false
 	}
@@ -122,7 +141,7 @@ func (o *HealthStatus) GetCorrelationIdOk() (*string, bool) {
 }
 
 // HasCorrelationId returns a boolean if a field has been set.
-func (o *HealthStatus) HasCorrelationId() bool {
+func (o *AuthorizationError) HasCorrelationId() bool {
 	if o != nil && !IsNil(o.CorrelationId) {
 		return true
 	}
@@ -131,11 +150,11 @@ func (o *HealthStatus) HasCorrelationId() bool {
 }
 
 // SetCorrelationId gets a reference to the given string and assigns it to the CorrelationId field.
-func (o *HealthStatus) SetCorrelationId(v string) {
+func (o *AuthorizationError) SetCorrelationId(v string) {
 	o.CorrelationId = &v
 }
 
-func (o HealthStatus) MarshalJSON() ([]byte, error) {
+func (o AuthorizationError) MarshalJSON() ([]byte, error) {
 	toSerialize,err := o.ToMap()
 	if err != nil {
 		return []byte{}, err
@@ -143,24 +162,25 @@ func (o HealthStatus) MarshalJSON() ([]byte, error) {
 	return json.Marshal(toSerialize)
 }
 
-func (o HealthStatus) ToMap() (map[string]interface{}, error) {
+func (o AuthorizationError) ToMap() (map[string]interface{}, error) {
 	toSerialize := map[string]interface{}{}
 	toSerialize["status"] = o.Status
-	if !IsNil(o.Store) {
-		toSerialize["store"] = o.Store
-	}
+	toSerialize["reason"] = o.Reason
+	toSerialize["rejection_reasons"] = o.RejectionReasons
 	if !IsNil(o.CorrelationId) {
 		toSerialize["correlation_id"] = o.CorrelationId
 	}
 	return toSerialize, nil
 }
 
-func (o *HealthStatus) UnmarshalJSON(data []byte) (err error) {
+func (o *AuthorizationError) UnmarshalJSON(data []byte) (err error) {
 	// This validates that all required properties are included in the JSON object
 	// by unmarshalling the object into a generic map with string keys and checking
 	// that every required field exists as a key in the generic map.
 	requiredProperties := []string{
 		"status",
+		"reason",
+		"rejection_reasons",
 	}
 
 	allProperties := make(map[string]interface{})
@@ -177,53 +197,53 @@ func (o *HealthStatus) UnmarshalJSON(data []byte) (err error) {
 		}
 	}
 
-	varHealthStatus := _HealthStatus{}
+	varAuthorizationError := _AuthorizationError{}
 
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.DisallowUnknownFields()
-	err = decoder.Decode(&varHealthStatus)
+	err = decoder.Decode(&varAuthorizationError)
 
 	if err != nil {
 		return err
 	}
 
-	*o = HealthStatus(varHealthStatus)
+	*o = AuthorizationError(varAuthorizationError)
 
 	return err
 }
 
-type NullableHealthStatus struct {
-	value *HealthStatus
+type NullableAuthorizationError struct {
+	value *AuthorizationError
 	isSet bool
 }
 
-func (v NullableHealthStatus) Get() *HealthStatus {
+func (v NullableAuthorizationError) Get() *AuthorizationError {
 	return v.value
 }
 
-func (v *NullableHealthStatus) Set(val *HealthStatus) {
+func (v *NullableAuthorizationError) Set(val *AuthorizationError) {
 	v.value = val
 	v.isSet = true
 }
 
-func (v NullableHealthStatus) IsSet() bool {
+func (v NullableAuthorizationError) IsSet() bool {
 	return v.isSet
 }
 
-func (v *NullableHealthStatus) Unset() {
+func (v *NullableAuthorizationError) Unset() {
 	v.value = nil
 	v.isSet = false
 }
 
-func NewNullableHealthStatus(val *HealthStatus) *NullableHealthStatus {
-	return &NullableHealthStatus{value: val, isSet: true}
+func NewNullableAuthorizationError(val *AuthorizationError) *NullableAuthorizationError {
+	return &NullableAuthorizationError{value: val, isSet: true}
 }
 
-func (v NullableHealthStatus) MarshalJSON() ([]byte, error) {
+func (v NullableAuthorizationError) MarshalJSON() ([]byte, error) {
 	return json.Marshal(v.value)
 }
 
-func (v *NullableHealthStatus) UnmarshalJSON(src []byte) error {
+func (v *NullableAuthorizationError) UnmarshalJSON(src []byte) error {
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
